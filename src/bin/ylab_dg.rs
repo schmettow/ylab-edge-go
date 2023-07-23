@@ -4,7 +4,7 @@
 
 use {defmt_rtt as _, panic_probe as _};
 use embassy_executor::Spawner;
-use embassy_time::{Duration, Timer, Instant, Ticker};
+use embassy_time::{Duration, Timer, Instant};
 use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pin, Pull};
 
 // inter-thread communication
@@ -31,7 +31,7 @@ async fn logger_task(driver: Driver<'static, USB>) {
 #[derive(Debug,  // used as fmt
     Clone, Copy, // because next_state 
     PartialEq, Eq)] // testing equality
-enum AppState {New, Ready, Record}
+enum AppState {Ready, Record, New}
 
 static STATE: Signal<ThreadModeRawMutex, AppState> = Signal::new();
 
@@ -42,56 +42,45 @@ static STATE: Signal<ThreadModeRawMutex, AppState> = Signal::new();
 
 async fn led_task(led_pin: AnyPin) {
     let mut led = Output::new(led_pin, Level::Low);
-    led.set_low();
-    let state: AppState = STATE.wait().await; // we need at least one signal to kick-start
-    let mut ticker = Ticker::every(Duration::from_millis(200));
-
     loop {
-        if STATE.signaled() {
-            let state = STATE.wait().await;
-            match state {
-                AppState::Ready     => {led.set_high()},
-                AppState::Record    => {led.toggle()},
-                AppState::New       => {led.set_low()},
+            match STATE.wait().await {
+                AppState::Ready     => {led.set_low();},
+                AppState::Record    => {led.set_high();},
+                AppState::New       => {/*for _ in 1..5 {
+                                            led.toggle();
+                                            Timer::after(Duration::from_millis(200)).await;};
+                                        led.set_low();*/
+                                        led.set_high();},
             };
         };
-
-        if state == AppState::Record {
-            ticker.next().await;
-            led.toggle();
-            ticker.next().await;
-            led.toggle();
-            ticker.next().await;
-            led.toggle();
-        }    
     }
-}
 
 
 
 // Button events
-enum BtnEvent {Short, Long}
+enum BtnEvent {Press, Short, Long}
 static BTN_1: Signal<ThreadModeRawMutex, BtnEvent> = Signal::new();
 
 #[embassy_executor::task]
 async fn btn_task(btn_pin: AnyPin) {
     let mut btn = Input::new(btn_pin, Pull::Up);
     let debounce = 100;
-    let longpress = 1000;
+    //let longpress = 1000;
 
 
     loop {
         btn.wait_for_low().await;
-        let press_time = Instant::now().as_millis();
-        Timer::after(Duration::from_millis(debounce)).await;
+        //let press_time = Instant::now().as_millis();
+        //Timer::after(Duration::from_millis(debounce)).await;
+        BTN_1.signal(BtnEvent::Press); 
         
-        btn.wait_for_high().await;
+        /*btn.wait_for_rising_edge().await;
         if Instant::now().as_millis() - press_time >= longpress {
             BTN_1.signal(BtnEvent::Long);    
         } else {
             BTN_1.signal(BtnEvent::Short);    
         };
-        Timer::after(Duration::from_millis(debounce)).await;
+        Timer::after(Duration::from_millis(debounce)).await;*/
     };
 }
 
@@ -106,14 +95,15 @@ async fn main(spawner: Spawner) {
 
     let mut state: AppState = AppState::New;
     STATE.signal(state);
+
     //info!("{:?}", STATE);
     loop {
         let btn_1 = BTN_1.wait().await;
         let next_state = match (state, btn_1) {
-            (AppState::New,    BtnEvent::Short)  => AppState::Ready, 
-            (AppState::Ready,  BtnEvent::Short)  => AppState::Record, 
-            (AppState::Record,  BtnEvent::Short) => AppState::Ready, 
-            (_, BtnEvent::Long)                  => AppState::New,
+            (AppState::Ready,  BtnEvent::Press)  => AppState::Record, 
+            (AppState::Record,  BtnEvent::Press) => AppState::Ready,
+            (AppState::New,  BtnEvent::Press) => AppState::Ready,
+            (_, _) => state,
         };
       //  logger::info!("{:?}", STATE);
         STATE.signal(next_state);
