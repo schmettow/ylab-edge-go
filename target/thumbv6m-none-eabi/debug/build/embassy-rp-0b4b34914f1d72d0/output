@@ -1,0 +1,3 @@
+cargo:rustc-link-search=C:\Users\martin\OneDrive - University of Twente\Packages\ylab_embassy\target\thumbv6m-none-eabi\debug\build\embassy-rp-0b4b34914f1d72d0\out
+cargo:rerun-if-changed=build.rs
+cargo:rerun-if-changed=link-rp.x.in
