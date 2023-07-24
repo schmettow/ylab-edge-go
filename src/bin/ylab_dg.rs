@@ -75,20 +75,29 @@ use embassy_rp::bind_interrupts;
 bind_interrupts!(struct Irqs {
     ADC_IRQ_FIFO => InterruptHandler;
 });
-use embassy_rp::peripherals::PIN_27;
 
+use embassy_rp::peripherals::{PIN_26, PIN_27, PIN_28, PIN_29};
 static RESULT: Signal<ThreadModeRawMutex, u16> = Signal::new();
-// trait AdcPin: embedded_hal::adc::Channel<embassy_rp::adc::Adc<'static>> + embassy_rp::gpio::Pin {}
+//type AdcPin: embedded_hal::adc::Channel<embassy_rp::adc::Adc<'static>> + embassy_rp::gpio::Pin;
 
 #[embassy_executor::task]
 async fn adc_task(mut adc: Adc<'static>, 
-                  mut adc_pin: PIN_27,
+                  mut adc_0: PIN_26,
+                  mut adc_1: PIN_27,
+                  mut adc_2: PIN_28,
+                  mut adc_3: PIN_29,
                   hz: u64) {
     let mut ticker = Ticker::every(Duration::from_hz(hz));
     loop {
         // let mut adc_pin = p.PIN_27;
-        let result = adc.read(&mut adc_pin).await;
-        RESULT.signal(result);
+        let res = adc.read(&mut adc_0).await;
+        RESULT.signal(res);
+        let res = adc.read(&mut adc_1).await;
+        RESULT.signal(res);
+        let res = adc.read(&mut adc_2).await;
+        RESULT.signal(res);
+        let res = adc.read(&mut adc_3).await;
+        RESULT.signal(res);
         ticker.next().await;
          }
                            }
@@ -121,12 +130,14 @@ async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
     /* ADC */
     let adc: Adc<'_> = Adc::new(p.ADC, Irqs, Config::default());
-    let adc_pin = p.PIN_27;
     /* multi-tasking */ 
     spawner.spawn(led_task(p.PIN_25.degrade())).unwrap();
     spawner.spawn(btn_task(p.PIN_20.degrade())).unwrap();
     spawner.spawn(fake_task(1)).unwrap();
-    spawner.spawn(adc_task(adc, adc_pin, 42)).unwrap();
+    spawner.spawn(adc_task(adc, p.PIN_26, 
+                                p.PIN_27, 
+                                p.PIN_28, 
+                                p.PIN_29, 5000)).unwrap();
     /* state machine */
     let mut state = AppState::New;
     STATE.signal(state);
