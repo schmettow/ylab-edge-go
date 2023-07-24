@@ -4,9 +4,9 @@
 
 use {defmt_rtt as _, panic_probe as _};
 //use cortex_m::prelude::_embedded_hal_digital_InputPin;
-use embassy_executor::{Spawner, Executor};
-use embassy_rp::peripherals::PIN_26;
-use embassy_time::{Duration, Timer, Ticker, Instant, block_for};
+use embassy_executor::Spawner;
+//use embassy_executor::{Spawner, Executor};
+use embassy_time::{Duration, Ticker, Instant, block_for};
 use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pull, Pin};
 
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
@@ -20,12 +20,19 @@ async fn led_task(led_pin: AnyPin) {
     let mut led = Output::new(led_pin, Level::Low);
     loop {
             match STATE.wait().await {
-                AppState::Ready     => {led.set_low();},
+                AppState::New       => {
+                    for _ in 1..20 {
+                    led.toggle();
+                    block_for(Duration::from_millis(25));};
+                    led.set_low()},
+                AppState::Ready     => {
+                    led.set_low();
+                    block_for(Duration::from_millis(50));
+                    led.set_high();
+                    block_for(Duration::from_millis(50));
+                    led.set_low()},
                 AppState::Record    => {led.set_high();},
-                AppState::New       => {for _ in 1..20 {
-                                            led.toggle();
-                                            block_for(Duration::from_millis(25));};
-                                            led.set_low()},
+                
             };
         };
     }
@@ -33,6 +40,7 @@ async fn led_task(led_pin: AnyPin) {
 
 
 // BUTTON
+
 enum BtnEvent {Press, Short, Long}
 static BTN_1: Signal<ThreadModeRawMutex, BtnEvent> = Signal::new();
 
@@ -58,59 +66,83 @@ async fn btn_task(btn_pin: AnyPin) {
     };
 }
 
-/* use embassy_rp::adc::{Adc, Config, InterruptHandler};
+
+/* ADC  */
+
+//use embedded_hal::adc::{Channel, OneShot};
+use embassy_rp::adc::{Adc, Config, InterruptHandler};
 use embassy_rp::bind_interrupts;
 bind_interrupts!(struct Irqs {
     ADC_IRQ_FIFO => InterruptHandler;
 });
-*/
-static RESULT: Signal<ThreadModeRawMutex, u64> = Signal::new();
+use embassy_rp::peripherals::PIN_27;
+
+static RESULT: Signal<ThreadModeRawMutex, u16> = Signal::new();
+// trait AdcPin: embedded_hal::adc::Channel<embassy_rp::adc::Adc<'static>> + embassy_rp::gpio::Pin {}
 
 #[embassy_executor::task]
-async fn fake_task() {
-    let spm = 100;
-    let mut ticker = Ticker::every(Duration::from_hz(spm));
+async fn adc_task(mut adc: Adc<'static>, 
+                  mut adc_pin: PIN_27,
+                  hz: u64) {
+    let mut ticker = Ticker::every(Duration::from_hz(hz));
     loop {
-        let level = Instant::now().as_millis();
-        RESULT.signal(level);
+        // let mut adc_pin = p.PIN_27;
+        let result = adc.read(&mut adc_pin).await;
+        RESULT.signal(result);
+        ticker.next().await;
+         }
+                           }
+
+#[embassy_executor::task]
+async fn fake_task(hz: u64) {
+    let mut ticker = Ticker::every(Duration::from_hz(hz));
+    loop {
+        let result: u16 = 42;
+        RESULT.signal(result);
         ticker.next().await;
     };
 }
 
 
-///// MAIN
+/* MAIN */
+
+/// 
 // Define states
 #[derive(Debug,  // used as fmt
     Clone, Copy, // because next_state 
-    PartialEq, Eq)] // testing equality
+    PartialEq, Eq, )] // testing equality
 enum AppState {New, Ready, Record}
 static STATE: Signal<ThreadModeRawMutex, AppState> = Signal::new();
 
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    /* Peripherals */
     let p = embassy_rp::init(Default::default());
-    //let usb_driver = Driver::new(p.USB, Irqs);
-    
+    /* ADC */
+    let adc: Adc<'_> = Adc::new(p.ADC, Irqs, Config::default());
+    let adc_pin = p.PIN_27;
+    /* multi-tasking */ 
     spawner.spawn(led_task(p.PIN_25.degrade())).unwrap();
     spawner.spawn(btn_task(p.PIN_20.degrade())).unwrap();
-    spawner.spawn(fake_task()).unwrap();
-
+    spawner.spawn(fake_task(1)).unwrap();
+    spawner.spawn(adc_task(adc, adc_pin, 42)).unwrap();
+    /* state machine */
     let mut state = AppState::New;
     STATE.signal(state);
 
-    //info!("{:?}", STATE);
+
     loop {
         let btn_1 = BTN_1.wait().await;
         let next_state = 
             match (state, btn_1) {
-                (AppState::New,  BtnEvent::Short)    => AppState::Ready,
-                (AppState::Ready,  BtnEvent::Short)  => AppState::Record, 
+                (AppState::New,     BtnEvent::Short) => AppState::Ready,
+                (AppState::Ready,   BtnEvent::Short) => AppState::Record, 
                 (AppState::Record,  BtnEvent::Short) => AppState::Ready,
-                (_,  BtnEvent::Long)                 => AppState::New,
+                (_,                 BtnEvent::Long)  => AppState::New,
                 (_, _) => state,
             };
-        //  logger::info!("{:?}", STATE);
+
         if state != next_state {
             STATE.signal(next_state);
             state = next_state;
