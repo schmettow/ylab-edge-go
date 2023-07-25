@@ -28,14 +28,7 @@ use embedded_graphics::{
 };
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 
-//use core::fmt::Write;
-//use heapless::String;
-//fn make_mesg(mesg: i32) -> String {
-//    let mut data = String::<32>::new(mesg);
-//    return data;
-    //let _ = write!(data, "data:{mesg}");
-    //data
-//}
+/* DISPLAY */
 
 #[embassy_executor::task]
 async fn disp_task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
