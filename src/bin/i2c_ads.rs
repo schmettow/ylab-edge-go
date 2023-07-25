@@ -22,13 +22,32 @@ bind_interrupts!(struct Irqs {
 use embedded_ads111x as ads111x;
 
 
+#[embassy_executor::task]
+async fn adc_task(mut i2c: i2c::I2c<'_, I2C1, i2c::Async>, 
+                  hz: u64) {
+    let mut ticker = Ticker::every(Duration::from_hz(hz));
+    loop {
+        let res = adc.read(&mut adc_0).await;
+        RESULT.signal(res);
+        let res = adc.read(&mut adc_1).await;
+        RESULT.signal(res);
+        let res = adc.read(&mut adc_2).await;
+        RESULT.signal(res);
+        let res = adc.read(&mut adc_3).await;
+        RESULT.signal(res);
+        ticker.next().await;
+         }
+                           }
+
+
+
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
     let sda = p.PIN_14;
     let scl = p.PIN_15;
 
-    let i2c = i2c::I2c::new_async(p.I2C1, scl, sda, Irqs, Config::default());
+    let i2c: i2c::I2c<'_, I2C1, i2c::Async> = i2c::I2c::new_async(p.I2C1, scl, sda, Irqs, Config::default());
     
     let config = ads111x::ADS111xConfig::default()
         .mux(ads111x::InputMultiplexer::AIN0GND)
