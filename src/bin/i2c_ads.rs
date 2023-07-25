@@ -39,22 +39,25 @@ async fn ads_task(i2c: i2c::I2c<'static, I2C1, i2c::Async>,
     
     let mut ticker = Ticker::every(Duration::from_hz(hz));
     loop {
-        //config
-        // .mux(AIN0GND);
-        //ads.write_config(config);
-        // let _reading = ads.read_voltage().unwrap();
         let _reading = ads.read_single_voltage(Some(AIN0GND)).unwrap();
+        RESULT.signal(_reading);
         let _reading = ads.read_single_voltage(Some(AIN1GND)).unwrap();
+        RESULT.signal(_reading);
         let _reading = ads.read_single_voltage(Some(AIN2GND)).unwrap();
+        RESULT.signal(_reading);
         let _reading = ads.read_single_voltage(Some(AIN3GND)).unwrap();
+        RESULT.signal(_reading);
         ticker.next().await;
     }
                            }
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::signal::Signal;
 
-
+static RESULT: Signal<ThreadModeRawMutex, f32> = Signal::new();
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    let mut led = Output::new(p.PIN_25, Level::Low);
     let p = embassy_rp::init(Default::default());
     let sda: PIN_14 = p.PIN_14;
     let scl: PIN_15 = p.PIN_15;
@@ -68,7 +71,12 @@ async fn main(spawner: Spawner) {
     spawner.spawn(ads_task(i2c, 5000)).unwrap();
 
     loop {
-        ticker.next().await;
+        if RESULT.signaled() {
+            led.set_high();
+            Timer.after(Duration::from_millis(10)).await;
+            led.set_low();
+        }
+
     }
 
 }
