@@ -12,8 +12,8 @@ use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
+use log::{LevelFilter};
 use embassy_usb_logger;
-use log;
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
@@ -21,8 +21,14 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::task]
 async fn logger_task(driver: Driver<'static, USB>) {
-    embassy_usb_logger::run!(1024, log::max_level(log::LevelFilter::Info), driver);
-}
+    // This is copied from the crate. The run! macro is using set_mac_level, where the racy version is needed.
+        static LOGGER: embassy_usb_logger::UsbLogger<1024> = embassy_usb_logger::UsbLogger::new();
+        unsafe {
+            let _ = log::set_logger_racy(&LOGGER)
+                    .map(|()| log::set_max_level_racy(LevelFilter::Info));
+        };
+        let _ = LOGGER.run(&mut embassy_usb_logger::LoggerState::new(), driver).await;
+    }
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
