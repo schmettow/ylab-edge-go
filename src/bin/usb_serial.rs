@@ -23,6 +23,7 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
+    let p = embassy_rp::init(Default::default());
     info!("Hello there!");
 
     let p = embassy_rp::init(Default::default());
@@ -34,7 +35,7 @@ async fn main(_spawner: Spawner) {
     let mut config = Config::new(0xc0de, 0xcafe);
     config.manufacturer = Some("Embassy");
     config.product = Some("USB-serial example");
-    config.serial_number = Some("12345678");
+    config.serial_number = None;
     config.max_power = 100;
     config.max_packet_size_0 = 64;
 
@@ -64,7 +65,8 @@ async fn main(_spawner: Spawner) {
     );
 
     // Create classes on the builder.
-    let mut class = CdcAcmClass::new(&mut builder, &mut state, 64);
+    let mut class = 
+        CdcAcmClass::new(&mut builder, &mut state, 64);
 
     // Build the builder.
     let mut usb = builder.build();
@@ -77,7 +79,7 @@ async fn main(_spawner: Spawner) {
         loop {
             class.wait_connection().await;
             info!("Connected");
-            let _ = echo(&mut class).await;
+            let _ = hello(&mut class).await;
             info!("Disconnected");
         }
     };
@@ -98,12 +100,24 @@ impl From<EndpointError> for Disconnected {
     }
 }
 
+use embassy_rp::gpio::{AnyPin, Level, Output};
+
 async fn echo<'d, T: Instance + 'd>(class: &mut CdcAcmClass<'d, Driver<'d, T>>) -> Result<(), Disconnected> {
     let mut buf = [0; 64];
     loop {
         let n = class.read_packet(&mut buf).await?;
         let data = &buf[..n];
         info!("data: {:x}", data);
-        class.write_packet(data).await?;
+        let data = &buf[..n];
+        info!("data: {:x}", data);
+        class.write_packet(&data).await?;
+        //led.set_low();
+    }
+}
+
+async fn hello<'d, T: Instance + 'd>(class: &mut CdcAcmClass<'d, Driver<'d, T>>) -> Result<(), Disconnected> {
+    let mut buf: [u8;64] = [0; 64].into();
+    loop {
+        class.write_packet(&buf).await?;
     }
 }
