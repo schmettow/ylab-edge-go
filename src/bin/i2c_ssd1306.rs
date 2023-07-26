@@ -30,6 +30,27 @@ use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 
 /* DISPLAY */
 
+use core::fmt::Write;
+#[embassy_executor::task]
+async fn disptext_task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
+    let interface = I2CDisplayInterface::new(i2c);
+    let mut display =
+        Ssd1306::new(interface, 
+                DisplaySize128x64, 
+                DisplayRotation::Rotate0)
+        .into_terminal_mode();
+    display.init().unwrap();
+
+    
+    loop {
+        let mesg: i32 = MESG.wait().await;
+        let _ = display.clear();
+        let mut str_conv = itoa::Buffer::new(); // conversion to string
+        let _ = display.write_str(str_conv.format(mesg));
+    }
+}
+
+
 #[embassy_executor::task]
 async fn disp_task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
     let interface = I2CDisplayInterface::new(i2c);
@@ -46,6 +67,10 @@ async fn disp_task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
     .build();
     
     loop {
+        let mesg: i32 = MESG.wait().await;
+        let mut str_conv = itoa::Buffer::new(); // conversion to string
+
+        let _ = display.clear(BinaryColor::Off);
         Text::with_baseline("Hello world!", Point::zero(), text_style, Baseline::Top)
         .draw(&mut display)
         .unwrap();
@@ -54,16 +79,16 @@ async fn disp_task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
         .draw(&mut display)
         .unwrap();
         
-        let mesg: i32 = MESG.wait().await;
-        let mut str_conv = itoa::Buffer::new(); // conversion to string
-        display.flush().unwrap();
-
         Text::with_baseline(str_conv.format(mesg), Point::new(0, 32), text_style, Baseline::Top)
         .draw(&mut display)
         .unwrap();
+        
+        display.flush().unwrap();
 
     }
-                           }
+}
+
+
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::signal::Signal;
 
