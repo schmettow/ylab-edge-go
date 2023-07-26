@@ -6,7 +6,7 @@ use {defmt_rtt as _, panic_probe as _};
 //use cortex_m::prelude::_embedded_hal_digital_InputPin;
 use embassy_executor::Spawner;
 //use embassy_executor::{Spawner, Executor};
-use embassy_time::{Duration, Ticker, Instant, block_for};
+use embassy_time::{Duration, Ticker, Instant, Timer, block_for};
 use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pull, Pin};
 
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
@@ -17,7 +17,9 @@ use embassy_sync::signal::Signal;
 #[embassy_executor::task]
 
 async fn led_task(led_pin: AnyPin) {
-    let mut led = Output::new(led_pin, Level::Low);
+    let mut led = 
+        Output::new(led_pin, 
+     Level::Low);
     loop {
             match STATE.wait().await {
                 AppState::New       => {
@@ -55,14 +57,14 @@ async fn btn_task(btn_pin: AnyPin) {
         btn.wait_for_low().await;
         BTN_1.signal(BtnEvent::Press);
         let when_pressed = Instant::now().as_millis();
-        block_for(Duration::from_millis(debounce));
+        Timer::after(Duration::from_millis(debounce)).await;
         btn.wait_for_high().await;
         if Instant::now().as_millis() - when_pressed >= longpress {
             BTN_1.signal(BtnEvent::Long);    
         } else {
             BTN_1.signal(BtnEvent::Short);    
         };
-        block_for(Duration::from_millis(debounce));
+        Timer::after(Duration::from_millis(longpress)).await;
     };
 }
 
@@ -112,7 +114,6 @@ async fn fake_task(hz: u64) {
     };
 }
 
-
 /* MAIN */
 
 /// 
@@ -122,7 +123,6 @@ async fn fake_task(hz: u64) {
     PartialEq, Eq, )] // testing equality
 enum AppState {New, Ready, Record}
 static STATE: Signal<ThreadModeRawMutex, AppState> = Signal::new();
-
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
