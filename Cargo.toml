@@ -22,8 +22,6 @@ embassy-sync = { version = "0.2.0", features = ["defmt"] }
 embassy-time = { version = "0.1.0", features = ["nightly", "unstable-traits", "defmt", "defmt-timestamp-uptime"] }
 
 embassy-rp = { version = "0.1.0", features = ["defmt", "unstable-traits", "nightly", "unstable-pac", "time-driver", "critical-section-impl"] }
-#embassy-stm32 = { version = "0.1.0", features = ["defmt", "unstable-traits", "nightly", "unstable-pac", "time-driver", "critical-section-impl"] }
-
 log = "0.4"
 
 ## USB + logging via USB support
@@ -34,6 +32,18 @@ fixed = "1.23.1"
 fixed-macro = "1.2.0"
 smart-leds = "0.3.0"
 embedded-hal = "0.2.7"
+lsm6ds33 = "0.5.0"
+embedded-hal-async = "0.2.0-alpha.1"
+ads1x1x = "0.2.2"
+embedded-ads111x = "0.1.1"
+ssd1306 = "0.8.0"
+embedded-graphics = "0.8.0"
+itoa = "1.0.9"
+heapless = "0.7.16"
+usbd-serial = "0.1.1"
+rp2040-hal = "0.8.2"
+usb-device = "0.2.9"
+embedded-sdmmc = "0.5.0"
 
 ## network drivers for cyw43 (pico W) or wiznet w5500
 # embassy-net = { version = "0.1.0", features = ["defmt", "nightly", "tcp", "dhcpv4", "medium-ethernet"] }
