@@ -8,70 +8,80 @@
 #![feature(type_alias_impl_trait)]
 
 use embassy_executor::Spawner;
-use embassy_time::{Duration, Ticker, Instant};
+//use embassy_time::Duration;
 use {defmt_rtt as _, panic_probe as _};
 
-/* Sensor Generics */
-
-struct SensorResult<S> {
-    timestamp: Instant,
-    reading: S,
-}
+/* YLAB sensor */
 
 /* ADS1115 Sensor */
-
-use embedded_ads111x as ads111x;
-use embedded_ads111x::InputMultiplexer::{AIN0GND, AIN1GND, AIN2GND, AIN3GND};
-type ADSResult = SensorResult<(f32, f32, f32, f32)>;
-static ADS_RESULT:Signal<ThreadModeRawMutex, ADSResult> = Signal::new();
-
-#[embassy_executor::task]
-async fn ads_task(i2c: i2c::I2c<'static, I2C1, i2c::Async>,
-                  hz: u64) {
-    // ads1115
+mod ylab_ads1115 {
+    /* Sensor Generics */
+    use embassy_time::{Duration, Ticker, Instant};
     
-    let config = 
-        ads111x::ADS111xConfig::default()
-        .dr(ads111x::DataRate::SPS8)
-        .pga(ads111x::ProgramableGainAmplifier::V4_096);
-    
-    let mut ads: ads111x::ADS111x<i2c::I2c<'_, I2C1, i2c::Async>> = 
-        ads111x::ADS111x::new(i2c,
-                              0x48u8, config).unwrap();
-    
-    let mut ticker = Ticker::every(Duration::from_hz(hz));
-    loop {
-        let reading:(f32, f32, f32, f32) =
-            (ads.read_single_voltage(Some(AIN0GND)).unwrap(),
-            ads.read_single_voltage(Some(AIN1GND)).unwrap(),
-            ads.read_single_voltage(Some(AIN2GND)).unwrap(),
-            ads.read_single_voltage(Some(AIN3GND)).unwrap());
-        let now = Instant::now();
-        let result = 
-            ADSResult{timestamp: now, 
-                      reading: reading};        
-        ADS_RESULT.signal(result);
-        ticker.next().await;
+    pub struct SensorResult<S> {
+        pub time: Instant,
+        pub reading: S,
     }
-}
-                           
+    
+    type ADSRead = (f32, f32, f32, f32);
+    type ADSResult = SensorResult<ADSRead>;
+    pub static ADS_RESULT:Signal<ThreadModeRawMutex, ADSResult> = Signal::new();
+    // I2C    
+    use embassy_rp::i2c::{self, Config, InterruptHandler};
+    use embassy_rp::peripherals::{PIN_14, PIN_15, I2C1};
+    use embassy_rp::bind_interrupts;
+    use embedded_ads111x as ads111x;
+    use embedded_ads111x::InputMultiplexer::{AIN0GND, AIN1GND, AIN2GND, AIN3GND};
+    // ITC
+    use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+    use embassy_sync::signal::Signal;
 
+
+    #[embassy_executor::task]
+    pub async fn ads_task(contr: I2C1, 
+                      sda: PIN_14, 
+                      scl: PIN_15,
+                      hz: u64) {
+        // ads1115
+        // Init I2C
+        bind_interrupts!(struct Irqs {
+            I2C1_IRQ => InterruptHandler<I2C1>;
+        });        
+        let i2c: i2c::I2c<'_, I2C1, i2c::Async> = 
+            i2c::I2c::new_async(contr, 
+                                scl, sda, 
+                                Irqs, 
+                                Config::default());
+        let config = 
+            ads111x::ADS111xConfig::default()
+            .dr(ads111x::DataRate::SPS8)
+            .pga(ads111x::ProgramableGainAmplifier::V4_096);
+        
+        let mut ads: ads111x::ADS111x<i2c::I2c<'_, I2C1, i2c::Async>> = 
+            ads111x::ADS111x::new(i2c,
+                                0x48u8, config).unwrap();
+        
+        let mut ticker = Ticker::every(Duration::from_hz(hz));
+        loop {
+            let reading: ADSRead =
+                (ads.read_single_voltage(Some(AIN0GND)).unwrap(),
+                ads.read_single_voltage(Some(AIN1GND)).unwrap(),
+                ads.read_single_voltage(Some(AIN2GND)).unwrap(),
+                ads.read_single_voltage(Some(AIN3GND)).unwrap());
+            let now = Instant::now();
+            let result = 
+                ADSResult{time: now, reading: reading};       
+            ADS_RESULT.signal(result);
+            ticker.next().await;
+            }
+    }
+                           
+}
 
 /* MAIN */
 
 // I2C
-use embassy_rp::bind_interrupts;
-bind_interrupts!(struct Irqs {
-    I2C1_IRQ => InterruptHandler<I2C1>;
-});
-use embassy_rp::i2c::{self, Config, InterruptHandler};
-use embassy_rp::peripherals::{PIN_14, PIN_15, I2C1};
-
-// ITC
-use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
-use embassy_sync::signal::Signal;
-//static RESULT: Signal<ThreadModeRawMutex, f32> = Signal::new();
-
+use embassy_rp::peripherals::{PIN_14, PIN_15};
 // LED
 use embassy_rp::gpio::{Output, Level};
 
@@ -81,18 +91,17 @@ async fn main(spawner: Spawner) {
     let mut led = Output::new(p.PIN_25, 
                                                   Level::Low);
     // I2C
+    let i2c_contr = p.I2C1;
     let sda: PIN_14 = p.PIN_14;
     let scl: PIN_15 = p.PIN_15;
-    let i2c: i2c::I2c<'_, I2C1, i2c::Async> = 
-        i2c::I2c::new_async(p.I2C1, 
-                            scl, sda, 
-                            Irqs, 
-                            Config::default());
-
-    spawner.spawn(ads_task(i2c, 4)).unwrap();
+    let hz = 2;
+    
+    spawner.spawn(ylab_ads1115::ads_task(i2c_contr, sda, scl, hz)).unwrap();
         
     loop {
-        let _result = ADS_RESULT.wait().await;
+        let result = ylab_ads1115::ADS_RESULT.wait().await;
+        let _when = result.time;
+        let _what = result.reading;
         led.toggle();
     }
 
