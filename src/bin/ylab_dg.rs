@@ -15,7 +15,7 @@ use embassy_sync::signal::Signal;
 
 // LED control
 mod ylab_led {
-    use embassy_time::{Duration, block_for, Timer};
+    use embassy_time::{Duration, Timer};
     use embassy_rp::gpio::{AnyPin, Output, Level};
     use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
     use embassy_sync::signal::Signal;
@@ -153,6 +153,7 @@ async fn main(spawner: Spawner) {
                                 p.PIN_29, 5000)).unwrap();
     /* state machine */
     let mut state = AppState::New;
+    ylab_led::LED.signal(ylab_led::State::Off);
     STATE.signal(state);
 
 
@@ -171,8 +172,7 @@ async fn main(spawner: Spawner) {
             match next_state {
                 AppState::New       => {ylab_led::LED.signal(ylab_led::State::Vibrate)},
                 AppState::Ready     => {ylab_led::LED.signal(ylab_led::State::Blink)},
-                AppState::Record    => {ylab_led::LED.signal(ylab_led::State::Steady)},
-                _                   => {ylab_led::LED.signal(ylab_led::State::Off)},
+                AppState::Record    => {ylab_led::LED.signal(ylab_led::State::Steady)}
             }
             STATE.signal(next_state);
             state = next_state;
