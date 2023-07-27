@@ -1,20 +1,22 @@
-//! This example shows how to use USB (Universal Serial Bus) in the RP2040 chip.
+//! USB Logging
 //!
 //! This creates the possibility to send log::info/warn/error/debug! to USB serial port.
+//! Can be used to improvise data streaming via USB 
 
 #![no_std]
 #![no_main]
 #![feature(type_alias_impl_trait)]
 
 use embassy_executor::Spawner;
+use embassy_time::{Duration, Timer};
+use {defmt_rtt as _, panic_probe as _};
+
+/* USB Logging */
 use embassy_rp::bind_interrupts;
 use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
-use embassy_time::{Duration, Timer};
-use {defmt_rtt as _, panic_probe as _};
 use log::{LevelFilter};
 use embassy_usb_logger;
-
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
 });
@@ -30,12 +32,12 @@ async fn logger_task(driver: Driver<'static, USB>) {
         let _ = LOGGER.run(&mut embassy_usb_logger::LoggerState::new(), driver).await;
     }
 
+/* MAIN */
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
     let driver = Driver::new(p.USB, Irqs);
     spawner.spawn(logger_task(driver)).unwrap();
-
     let mut counter = 0;
     loop {
         counter += 1;

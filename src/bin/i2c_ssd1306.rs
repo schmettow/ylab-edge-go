@@ -1,7 +1,6 @@
-//! This example shows how to communicate asynchronous using i2c with external chips.
+//! Display support
 //!
-//! Example written for the [`MCP23017 16-Bit I2C I/O Expander with Serial Interface`] chip.
-//! (https://www.microchip.com/en-us/product/mcp23017)
+//! Example written for the common SSD1306 Oled display
 
 #![no_std]
 #![no_main]
@@ -11,12 +10,7 @@ use embassy_executor::Spawner;
 use {defmt_rtt as _, panic_probe as _};
 use embassy_time::{Duration, Ticker};
 
-use embassy_rp::i2c::{self, Config, InterruptHandler};
-use embassy_rp::peripherals::{PIN_4, PIN_5, I2C0};
-use embassy_rp::bind_interrupts;
-bind_interrupts!(struct Irqs {
-    I2C0_IRQ => InterruptHandler<I2C0>;
-});
+/* DISPLAY */
 
 use itoa;
 use embedded_graphics::{
@@ -28,8 +22,7 @@ use embedded_graphics::{
 };
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 
-/* DISPLAY */
-
+ // Text display
 use core::fmt::Write;
 #[embassy_executor::task]
 async fn disptext_task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
@@ -50,7 +43,7 @@ async fn disptext_task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
     }
 }
 
-
+ // Graphics display
 #[embassy_executor::task]
 async fn disp_task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
     let interface = I2CDisplayInterface::new(i2c);
@@ -71,7 +64,8 @@ async fn disp_task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
         let mut str_conv = itoa::Buffer::new(); // conversion to string
 
         let _ = display.clear(BinaryColor::Off);
-        Text::with_baseline("Hello world!", Point::zero(), text_style, Baseline::Top)
+        Text::with_baseline("Hello world!", 
+            Point::zero(), text_style, Baseline::Top)
         .draw(&mut display)
         .unwrap();
 
@@ -84,19 +78,29 @@ async fn disp_task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
         .unwrap();
         
         display.flush().unwrap();
-
     }
 }
 
 
+/* MAIN */
+
+// I2C
+use embassy_rp::i2c::{self, Config, InterruptHandler};
+use embassy_rp::peripherals::{PIN_4, PIN_5, I2C0};
+use embassy_rp::bind_interrupts;
+bind_interrupts!(struct Irqs {
+    I2C0_IRQ => InterruptHandler<I2C0>;
+});
+
+// inter-thread communication
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::signal::Signal;
-
 static MESG: Signal<ThreadModeRawMutex, i32> 
     = Signal::new();
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    // Setting up I2C0 on pins 4 and 5 (Grove 3)
     let p = embassy_rp::init(Default::default());
     let sda: PIN_4 = p.PIN_4;
     let scl: PIN_5 = p.PIN_5;
@@ -105,7 +109,9 @@ async fn main(spawner: Spawner) {
                             scl, sda, 
                             Irqs, 
                             Config::default());
+    // Kicking off the display task
     spawner.spawn(disp_task(i2c)).unwrap();
+    // main loop sends a message every 1 sec
     let mut ticker = Ticker::every(Duration::from_hz(1));
     let mut counter = 0;
     MESG.signal(counter);
