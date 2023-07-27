@@ -6,40 +6,53 @@ use {defmt_rtt as _, panic_probe as _};
 //use cortex_m::prelude::_embedded_hal_digital_InputPin;
 use embassy_executor::Spawner;
 //use embassy_executor::{Spawner, Executor};
-use embassy_time::{Duration, Ticker, Instant, Timer, block_for};
-use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pull, Pin};
+use embassy_time::{Duration, Ticker, Instant, Timer};
+use embassy_rp::gpio::{AnyPin, Input, Pull, Pin};
 
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::signal::Signal;
 
 
 // LED control
-#[embassy_executor::task]
-
-async fn led_task(led_pin: AnyPin) {
-    let mut led = 
-        Output::new(led_pin, 
-     Level::Low);
-    loop {
-            match STATE.wait().await {
-                AppState::New       => {
-                    for _ in 1..20 {
-                    led.toggle();
-                    block_for(Duration::from_millis(25));};
-                    led.set_low()},
-                AppState::Ready     => {
-                    led.set_low();
-                    block_for(Duration::from_millis(50));
-                    led.set_high();
-                    block_for(Duration::from_millis(50));
-                    led.set_low()},
-                AppState::Record    => {led.set_high();},
-                
-            };
-        };
-    }
-
-
+mod ylab_led {
+    use embassy_time::{Duration, block_for, Timer};
+    use embassy_rp::gpio::{AnyPin, Output, Level};
+    use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+    use embassy_sync::signal::Signal;
+    pub enum State {Vibrate, Blink, Steady, Off}
+    pub static LED: Signal<ThreadModeRawMutex, State> = Signal::new();
+    
+    #[embassy_executor::task]
+    pub async fn led_task(led_pin: AnyPin) {
+        
+        let mut led = 
+            Output::new(led_pin, 
+        Level::Low);
+        loop {
+                match LED.wait().await {
+                    State::Vibrate      => {
+                        for _ in 1..10 {
+                            led.set_high();
+                            Timer::after(Duration::from_millis(25)).await;
+                            led.set_low();
+                            Timer::after(Duration::from_millis(25)).await;
+                        };
+                    },
+                    State::Blink        => {
+                        led.set_low();
+                        Timer::after(Duration::from_millis(25)).await;
+                        led.set_high();
+                        Timer::after(Duration::from_millis(50)).await;
+                        led.set_low()},
+                    State::Steady       => {
+                        led.set_high()},
+                    State::Off  => {
+                        led.set_low()
+                    },
+                    }   
+                };
+            }
+}
 
 // BUTTON
 
@@ -131,7 +144,7 @@ async fn main(spawner: Spawner) {
     /* ADC */
     let adc: Adc<'_> = Adc::new(p.ADC, Irqs, Config::default());
     /* multi-tasking */ 
-    spawner.spawn(led_task(p.PIN_25.degrade())).unwrap();
+    spawner.spawn(ylab_led::led_task(p.PIN_25.degrade())).unwrap();
     spawner.spawn(btn_task(p.PIN_20.degrade())).unwrap();
     spawner.spawn(fake_task(1)).unwrap();
     spawner.spawn(adc_task(adc, p.PIN_26, 
@@ -155,6 +168,12 @@ async fn main(spawner: Spawner) {
             };
 
         if state != next_state {
+            match next_state {
+                AppState::New       => {ylab_led::LED.signal(ylab_led::State::Vibrate)},
+                AppState::Ready     => {ylab_led::LED.signal(ylab_led::State::Blink)},
+                AppState::Record    => {ylab_led::LED.signal(ylab_led::State::Steady)},
+                _                   => {ylab_led::LED.signal(ylab_led::State::Off)},
+            }
             STATE.signal(next_state);
             state = next_state;
         }
