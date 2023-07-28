@@ -10,7 +10,7 @@ use defmt::*;
 use embassy_executor::Executor;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::multicore::{spawn_core1, Stack};
-use embassy_rp::peripherals::PIN_25;
+use embassy_rp::peripherals::{PIN_25};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Timer};
@@ -31,6 +31,7 @@ enum LedState {
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
     let led = Output::new(p.PIN_25, Level::Low);
+    let usb = p.USB;
 
     spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
         let executor1 = EXECUTOR1.init(Executor::new());
@@ -38,12 +39,14 @@ fn main() -> ! {
     });
 
     let executor0 = EXECUTOR0.init(Executor::new());
-    executor0.run(|spawner| unwrap!(spawner.spawn(core0_task())));
+    executor0.run(|spawner| {   unwrap!(spawner.spawn(core0_task()));
+                                               unwrap!(spawner.spawn(ylab_bsu::logger_task(usb)));
+                                            });
 }
 
 #[embassy_executor::task]
 async fn core0_task() {
-    info!("Hello from core 0");
+    log::info!("Hello from core 0");
     loop {
         CHANNEL.send(LedState::On).await;
         Timer::after(Duration::from_millis(100)).await;
@@ -52,13 +55,46 @@ async fn core0_task() {
     }
 }
 
+
 #[embassy_executor::task]
 async fn core1_task(mut led: Output<'static, PIN_25>) {
-    info!("Hello from core 1");
+    log::info!("Hello from core 1");
     loop {
         match CHANNEL.recv().await {
-            LedState::On => led.set_high(),
-            LedState::Off => led.set_low(),
+            LedState::On => {led.set_high();
+                             log::info!("On")},
+            LedState::Off => {led.set_low();
+                              log::info!("Off")},
+            
         }
     }
 }
+
+mod ylab_bsu {
+    /* USB Logging */
+    use embassy_rp::bind_interrupts;
+    use embassy_rp::peripherals::USB;
+    use embassy_rp::usb::{Driver, InterruptHandler};
+    use log::{LevelFilter};
+    use embassy_usb_logger;
+
+    #[embassy_executor::task]
+    pub async fn logger_task(usb: USB) {
+        bind_interrupts!(struct Irqs {
+            USBCTRL_IRQ => InterruptHandler<USB>;
+        });
+
+        let driver = 
+            Driver::new(usb, Irqs);
+        // This is copied from the crate. The run! macro is using set_max_level, where the racy version is needed.
+        static LOGGER: embassy_usb_logger::UsbLogger<1024> = 
+            embassy_usb_logger::UsbLogger::new();
+        unsafe {
+            let _ = log::set_logger_racy(&LOGGER)
+                    .map(|()| log::set_max_level_racy(LevelFilter::Info));
+        };
+        let _ = LOGGER.run(&mut embassy_usb_logger::LoggerState::new(), driver)
+                .await;
+        }
+}
+
