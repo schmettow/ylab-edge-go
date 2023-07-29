@@ -77,3 +77,49 @@ pub mod yui {
         }
     }
 }
+
+
+
+pub mod ysense {
+    pub mod adc {
+        use embassy_rp::adc::Adc;
+        // use embassy_rp::adc::{Adc, InterruptHandler};
+        // use embassy_rp::bind_interrupts;
+        /*bind_interrupts!(struct Irqs {
+            ADC_IRQ_FIFO => InterruptHandler;
+        });*/
+        use embassy_time::{Duration, Ticker};
+        use embassy_rp::peripherals::{PIN_26, PIN_27, PIN_28, PIN_29};
+        use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+        use embassy_sync::signal::Signal;
+        pub static RESULT: Signal<ThreadModeRawMutex, u16> = Signal::new();
+        //type AdcPin: embedded_hal::adc::Channel<embassy_rp::adc::Adc<'static>> + embassy_rp::gpio::Pin;
+
+        #[embassy_executor::task]
+        async fn adc_task(mut adc: Adc<'static>, 
+                        mut adc_0: PIN_26,
+                        mut adc_1: PIN_27,
+                        mut adc_2: PIN_28,
+                        mut adc_3: PIN_29,
+                        hz: u64) {
+            let mut ticker = Ticker::every(Duration::from_hz(hz));
+            loop {
+                // let mut adc_pin = p.PIN_27;
+                let res = adc.read(&mut adc_0)
+                .await;
+                RESULT.signal(res);
+                let res = adc.read(&mut adc_1)
+                .await;
+                RESULT.signal(res);
+                let res = adc.read(&mut adc_2)
+                .await;
+                RESULT.signal(res);
+                let res = adc.read(&mut adc_3)
+                .await;
+                RESULT.signal(res);
+                ticker.next()
+                .await;
+                }
+        }
+    }
+}
