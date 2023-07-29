@@ -96,7 +96,7 @@ pub mod ysense {
         //type AdcPin: embedded_hal::adc::Channel<embassy_rp::adc::Adc<'static>> + embassy_rp::gpio::Pin;
 
         #[embassy_executor::task]
-        async fn adc_task(mut adc: Adc<'static>, 
+        pub async fn task(mut adc: Adc<'static>, 
                         mut adc_0: PIN_26,
                         mut adc_1: PIN_27,
                         mut adc_2: PIN_28,

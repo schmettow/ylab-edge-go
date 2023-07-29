@@ -13,10 +13,11 @@ use embassy_sync::signal::Signal;
 // YUI
 use ylab::yui::led as yled;
 use ylab::yui::btn as ybtn;
+use ylab::ysense::adc as yadc;
 
 /* ADC  */
 
-//use embedded_hal::adc::{Channel, OneShot};
+// use embedded_hal::adc::{Channel, OneShot};
 use embassy_rp::adc::{Adc, Config, InterruptHandler};
 use embassy_rp::bind_interrupts;
 bind_interrupts!(struct Irqs {
@@ -36,7 +37,7 @@ async fn adc_task(mut adc: Adc<'static>,
                   hz: u64) {
     let mut ticker = Ticker::every(Duration::from_hz(hz));
     loop {
-        // let mut adc_pin = p.PIN_27;
+        //let mut adc_pin = p.PIN_27;
         let res = adc.read(&mut adc_0).await;
         RESULT.signal(res);
         let res = adc.read(&mut adc_1).await;
@@ -78,7 +79,7 @@ async fn main(spawner: Spawner) {
     /* multi-tasking */ 
     spawner.spawn(yled::task(p.PIN_25.degrade())).unwrap();
     spawner.spawn(ybtn::task(p.PIN_20.degrade())).unwrap();
-    spawner.spawn(adc_task(adc, p.PIN_26, 
+    spawner.spawn(yadc::task(adc, p.PIN_26, 
                                 p.PIN_27, 
                                 p.PIN_28, 
                                 p.PIN_29, 5000)).unwrap();
@@ -103,7 +104,9 @@ async fn main(spawner: Spawner) {
             match next_state {
                 AppState::New       => {yled::LED.signal(yled::State::Vibrate)},
                 AppState::Ready     => {yled::LED.signal(yled::State::Blink)},
-                AppState::Record    => {yled::LED.signal(yled::State::Steady)}
+                AppState::Record    => {yled::LED.signal(yled::State::Steady);
+                                        let _result = yadc::RESULT.wait()
+                                            .await;}
             }
             STATE.signal(next_state);
             state = next_state;
