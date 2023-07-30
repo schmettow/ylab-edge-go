@@ -13,16 +13,8 @@ use embassy_sync::signal::Signal;
 // YUI
 use ylab::yui::led as yled;
 use ylab::yui::btn as ybtn;
+// Ysense
 use ylab::ysense::adc as yadc;
-
-/* ADC  */
-
-// use embedded_hal::adc::{Channel, OneShot};
-use embassy_rp::adc::{Adc, Config, InterruptHandler};
-use embassy_rp::bind_interrupts;
-bind_interrupts!(struct Irqs {
-    ADC_IRQ_FIFO => InterruptHandler;
-});
 
 #[embassy_executor::task]
 async fn fake_task(hz: u64) {
@@ -49,12 +41,10 @@ static STATE: Signal<ThreadModeRawMutex, AppState> = Signal::new();
 async fn main(spawner: Spawner) {
     /* Peripherals */
     let p = embassy_rp::init(Default::default());
-    /* ADC */
-    let adc: Adc<'_> = Adc::new(p.ADC, Irqs, Config::default());
     /* multi-tasking */ 
     spawner.spawn(yled::task(p.PIN_25.degrade())).unwrap();
     spawner.spawn(ybtn::task(p.PIN_20.degrade())).unwrap();
-    spawner.spawn(yadc::task(adc, p.PIN_26, 
+    spawner.spawn(yadc::task(p.ADC, p.PIN_26, 
                                 p.PIN_27, 
                                 p.PIN_28, 
                                 p.PIN_29, 5000)).unwrap();
