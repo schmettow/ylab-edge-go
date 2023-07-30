@@ -11,10 +11,10 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::signal::Signal;
 
 // YUI
-use ylab::yui::led as yled;
-use ylab::yui::btn as ybtn;
-// Ysense
-use ylab::ysense::adc as yadc;
+use ylab::yuio::led as yled;
+use ylab::yuii::btn as ybtn;
+// ysns sensor node
+use ylab::ysns::adc as yadc;
 
 #[embassy_executor::task]
 async fn fake_task(hz: u64) {
@@ -41,14 +41,14 @@ static STATE: Signal<ThreadModeRawMutex, AppState> = Signal::new();
 async fn main(spawner: Spawner) {
     /* Peripherals */
     let p = embassy_rp::init(Default::default());
-    /* multi-tasking */ 
+    /* Tasks */ 
     spawner.spawn(yled::task(p.PIN_25.degrade())).unwrap();
     spawner.spawn(ybtn::task(p.PIN_20.degrade())).unwrap();
     spawner.spawn(yadc::task(p.ADC, p.PIN_26, 
                                 p.PIN_27, 
                                 p.PIN_28, 
                                 p.PIN_29, 5000)).unwrap();
-    /* state machine */
+    /* State machine */
     let mut state = AppState::New;
     yled::LED.signal(yled::State::Off);
     STATE.signal(state);
