@@ -16,6 +16,7 @@ use ylab::yuii::btn as ybtn;
 // ysns sensor node
 //mod ylab;
 use ylab::ysns::adc as yadc;
+use ylab::ytfk::bsu as ybsu;
 
 #[embassy_executor::task]
 async fn fake_task(hz: u64) {
@@ -49,6 +50,7 @@ async fn main(spawner: Spawner) {
                                 p.PIN_27, 
                                 p.PIN_28, 
                                 p.PIN_29, 5000)).unwrap();
+    spawner.spawn(ybsu::task(p.USB)).unwrap();
     /* State machine */
     let mut state = AppState::New;
     yled::LED.signal(yled::State::Off);
@@ -56,8 +58,8 @@ async fn main(spawner: Spawner) {
 
 
     loop {
-        let btn_1 = ybtn::BTN.wait().await;
-        let next_state = 
+        if let btn_1 = ybtn::BTN.wait().await {
+            let next_state = 
             match (state, btn_1) {
                 (AppState::New,     ybtn::Event::Short) => AppState::Ready,
                 (AppState::Ready,   ybtn::Event::Short) => AppState::Record, 
@@ -66,17 +68,23 @@ async fn main(spawner: Spawner) {
                 (_, _) => state,
             };
 
-        if state != next_state {
-            match next_state {
-                AppState::New       => {yled::LED.signal(yled::State::Vibrate)},
-                AppState::Ready     => {yled::LED.signal(yled::State::Blink)},
-                AppState::Record    => {yled::LED.signal(yled::State::Steady);
-                                        let _result = yadc::RESULT.wait()
-                                            .await;}
+            if state != next_state {
+                match next_state {
+                    AppState::New       => 
+                        {yled::LED.signal(yled::State::Vibrate)},
+                    AppState::Ready     => 
+                        {yled::LED.signal(yled::State::Blink)},
+                    AppState::Record    => 
+                        {yled::LED.signal(yled::State::Steady);
+                         yadc::CONTROL.signal(yadc::State::Record);}
+                }
             }
-            STATE.signal(next_state);
+            //STATE.signal(next_state);
             state = next_state;
         }
+        if let result = yadc::RESULT.wait().await {
+            log::info!("{:?}", result);
+        };
     }
 
 }
