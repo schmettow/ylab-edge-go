@@ -1,1 +1,0 @@
-C:\Users\martin\OneDrive\ -\ University\ of\ Twente\Packages\ylab_embassy\target\thumbv6m-none-eabi\debug\multicore: C:\Users\martin\OneDrive\ -\ University\ of\ Twente\Packages\ylab_embassy\build.rs C:\Users\martin\OneDrive\ -\ University\ of\ Twente\Packages\ylab_embassy\memory.x C:\Users\martin\OneDrive\ -\ University\ of\ Twente\Packages\ylab_embassy\src\bin\multicore.rs

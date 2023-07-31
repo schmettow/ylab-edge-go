@@ -1,1 +1,0 @@
-C:\Users\martin\OneDrive\ -\ University\ of\ Twente\Packages\ylab_embassy\target\thumbv6m-none-eabi\debug\ylab_dg: C:\Users\martin\OneDrive\ -\ University\ of\ Twente\Packages\ylab_embassy\build.rs C:\Users\martin\OneDrive\ -\ University\ of\ Twente\Packages\ylab_embassy\memory.x C:\Users\martin\OneDrive\ -\ University\ of\ Twente\Packages\ylab_embassy\src\bin\ylab_dg.rs
