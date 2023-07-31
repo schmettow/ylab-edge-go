@@ -14,6 +14,7 @@ use embassy_sync::signal::Signal;
 use ylab::yuio::led as yled;
 use ylab::yuii::btn as ybtn;
 // ysns sensor node
+//mod ylab;
 use ylab::ysns::adc as yadc;
 
 #[embassy_executor::task]

@@ -7,7 +7,7 @@ resolver = "2"
 
 [lib]
 name = "ylab"
-path = "src/ylab.rs"
+path = "src/ylab/mod.rs"
 
 [dependencies]
 cortex-m = { version = "0.7.6", features = ["inline-asm"] }
