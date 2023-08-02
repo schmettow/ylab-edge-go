@@ -7,19 +7,25 @@
 #![feature(type_alias_impl_trait)]
 
 use defmt::*;
-use embassy_executor::Executor;
-use embassy_rp::gpio::{Level, Output};
-use embassy_rp::multicore::{spawn_core1, Stack};
-use embassy_rp::peripherals::{PIN_25};
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
-use embassy_time::{Duration, Timer};
-use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
+use embassy_rp::gpio::{Level, Output};
+use embassy_rp::peripherals::PIN_25;
+use embassy_time::{Duration, Timer};
 
+/// For running multicore, we need Executor (not just spawner)
+use embassy_executor::Executor;
+use embassy_rp::multicore::{spawn_core1, Stack};
+
+/// The following code initializes the second stack, plus 
+/// two heaps
 static mut CORE1_STACK: Stack<4096> = Stack::new();
+use static_cell::StaticCell;
 static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
 static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
+
+/// Inter-core communication requires a special raw mutex.
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::Channel;
 static CHANNEL: Channel<CriticalSectionRawMutex, LedState, 1> = Channel::new();
 
 enum LedState {
@@ -27,6 +33,16 @@ enum LedState {
     Off,
 }
 
+/// # Main
+/// 
+/// The main program consists of three twasks on two cores: 
+/// 
+/// 1.  Core 0 is running a recurrent timer that sends On and Off commands to a channel. 
+/// 2.  Core 0 is running the usb logger
+/// 3.  Core 1 runs a task that receives the commands via the channel, 
+///     operates the Led and sends a confirmation to the logger. 
+
+use ylab::ytfk::bsu as ybsu;
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
@@ -40,7 +56,7 @@ fn main() -> ! {
 
     let executor0 = EXECUTOR0.init(Executor::new());
     executor0.run(|spawner| {   unwrap!(spawner.spawn(core0_task()));
-                                               unwrap!(spawner.spawn(ylab_bsu::logger_task(usb)));
+                                         unwrap!(spawner.spawn(ybsu::task(usb)));
                                             });
 }
 
@@ -70,7 +86,7 @@ async fn core1_task(mut led: Output<'static, PIN_25>) {
     }
 }
 
-mod ylab_bsu {
+/* mod ylab_bsu {
     /* USB Logging */
     use embassy_rp::bind_interrupts;
     use embassy_rp::peripherals::USB;
@@ -79,7 +95,7 @@ mod ylab_bsu {
     use embassy_usb_logger;
 
     #[embassy_executor::task]
-    pub async fn logger_task(usb: USB) {
+    pub async fn task(usb: USB) {
         bind_interrupts!(struct Irqs {
             USBCTRL_IRQ => InterruptHandler<USB>;
         });
@@ -98,3 +114,4 @@ mod ylab_bsu {
         }
 }
 
+*/
