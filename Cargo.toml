@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "ylab-embassy"
+name = "ylab-edge"
 version = "0.2.0"
 license = "MIT OR Apache-2.0"
 resolver = "2"
