@@ -8,47 +8,26 @@
 #![feature(type_alias_impl_trait)]
 
 use embassy_executor::Spawner;
-use embassy_rp::bind_interrupts;
-
 use embassy_time::{Duration, Ticker, Timer};
 use {defmt_rtt as _, panic_probe as _};
+use fmt::Debug;
 
+use embassy_rp::i2c::{self, Config, InterruptHandler};
+use embassy_rp::peripherals::{PIN_14, PIN_15, I2C1};
+
+use embassy_rp::bind_interrupts;
 bind_interrupts!(struct Irqs {
     I2C1_IRQ => InterruptHandler<I2C1>;
 });
 
 
-
-use embassy_rp::i2c::{self, Config, InterruptHandler};
-use embassy_rp::peripherals::{PIN_14, PIN_15, I2C1};
-use embedded_ads111x as ads111x;
-use embedded_ads111x::InputMultiplexer::{AIN0GND, AIN1GND, AIN2GND, AIN3GND};
+/* device-specific imports*/
+use lsm6ds33 as lsm6;
 
 #[embassy_executor::task]
-async fn ads_task(i2c: i2c::I2c<'static, I2C1, i2c::Async>,
-                  hz: u64) {
-    let config = 
-        ads111x::ADS111xConfig::default()
-        .dr(ads111x::DataRate::SPS8)
-        .pga(ads111x::ProgramableGainAmplifier::V4_096);
-    
-    let mut ads: ads111x::ADS111x<i2c::I2c<'_, I2C1, i2c::Async>> = 
-        ads111x::ADS111x::new(i2c,
-                              0x48u8, config).unwrap();
-    
-    let mut ticker = Ticker::every(Duration::from_hz(hz));
-    loop {
-        let _reading = ads.read_single_voltage(Some(AIN0GND)).unwrap();
-        RESULT.signal(_reading);
-        let _reading = ads.read_single_voltage(Some(AIN1GND)).unwrap();
-        RESULT.signal(_reading);
-        let _reading = ads.read_single_voltage(Some(AIN2GND)).unwrap();
-        RESULT.signal(_reading);
-        let _reading = ads.read_single_voltage(Some(AIN3GND)).unwrap();
-        RESULT.signal(_reading);
-        ticker.next().await;
-    }
-                           }
+async fn sensor_task(i2c: I2C1, hz: u64) {
+                  }
+
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::signal::Signal;
 use embassy_rp::gpio::{Output, Level};
@@ -66,17 +45,20 @@ async fn main(spawner: Spawner) {
                             scl, sda, 
                             Irqs, 
                             Config::default());
-    let mut ticker = Ticker::every(Duration::from_hz(10));
+    let mut sensor = lsm6::Lsm6ds33::new(i2c, Address::default()).unwrap();
+    let _measure = sensor.read_gyro();
 
-    spawner.spawn(ads_task(i2c, 5000)).unwrap();
+    //let mut ticker = Ticker::every(Duration::from_hz(10));
 
-    loop {
-        if RESULT.signaled() {
+    //spawner.spawn(sensor_task(i2c, 5000)).unwrap();
+    
+    /* loop {
+        let measure = sensor.read_gyro();
+        // if RESULT.signaled() {
             led.set_high();
             Timer::after(Duration::from_millis(10)).await;
             led.set_low();
-        }
-
-    }
-
+        //}
+        ticker.next().await;
+    } */
 }
