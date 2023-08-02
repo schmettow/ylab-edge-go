@@ -18,9 +18,9 @@ mod ylab_ads1115 {
     /* Sensor Generics */
     use embassy_time::{Duration, Ticker, Instant};
     
-    pub struct SensorResult<S> {
+    pub struct SensorResult<R> {
         pub time: Instant,
-        pub reading: S,
+        pub reading: R,
     }
     
     type ADSRead = (f32, f32, f32, f32);
