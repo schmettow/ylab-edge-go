@@ -1,22 +1,35 @@
 #![no_std]
 #![no_main]
 #![feature(type_alias_impl_trait)]
-
+use {defmt_rtt as _, panic_probe as _};
 /// __YLab Edge__ is a sensor recording firmware for the Cytron Maker Pi Pico
 /// board.
 /// # Dependencies
 /// 
 /// YLab Edge makes use of the Embassy framework, in particular:
 /// 
+/// + multi-core
+/// For running multicore, we need Executor (not just spawner) 
+/// and deformat macros (!unwrap)
+use embassy_executor::Executor;
+use embassy_rp::multicore::{spawn_core1, Stack};
+use defmt::*;
+
+/// The following code initializes the second stack, plus 
+/// two heaps
+static mut CORE1_STACK: Stack<4096> = Stack::new();
+use static_cell::StaticCell;
+static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
+static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
+
 /// +  multi-threading with async
-use {defmt_rtt as _, panic_probe as _};
-use embassy_executor::Spawner;
+// use embassy_executor::Spawner;
 /// + timing using Embassy time 
 // use embassy_time::{Duration, Ticker};
 /// + peripherals
 use embassy_rp::gpio::Pin;
 /// + thread-safe types
-//use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+//use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 //use embassy_sync::signal::Signal;
 
 /// Furthermore, YLab Edge brings its own high-level modules
@@ -76,24 +89,53 @@ enum AppState {New, Ready, Record}
 /// and initialized if that is necessary. In this case, entering Record 
 /// starts the sensor sampling.
 
-#[embassy_executor::main]
-async fn main(spawner: Spawner) {
-    
+#[cortex_m_rt::entry]
+fn main() -> ! {
     let p = embassy_rp::init(Default::default());
-    spawner.spawn(yled::task(p.PIN_25.degrade())).unwrap();
-    spawner.spawn(ydsp::task(p.I2C0, p.PIN_4, p.PIN_5)).unwrap();
-    spawner.spawn(ybtn::task(p.PIN_20.degrade())).unwrap();
-    spawner.spawn(yadc::task(p.ADC, p.PIN_26, 
+    spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
+        let executor1 = EXECUTOR1.init(Executor::new());
+        executor1.run(|spawner|
+            unwrap!(spawner.spawn(yadc::task(p.ADC, p.PIN_26, 
+                p.PIN_27, 
+                p.PIN_28, 
+                p.PIN_29, 
+                10)))
+        )
+    });
+
+    let executor0 = EXECUTOR0.init(Executor::new());
+    executor0.run(|spawner| {   
+        unwrap!(spawner.spawn(yled::task(p.PIN_25.degrade())));
+        unwrap!(spawner.spawn(ydsp::task(p.I2C0, p.PIN_4, p.PIN_5)));
+        unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
+        unwrap!(spawner.spawn(ybsu::task(p.USB)));
+        unwrap!(spawner.spawn(ui_task()));
+        unwrap!(spawner.spawn(storage_task()));
+    });
+
+
+    
+    
+    
+    /* spawner.spawn(yadc::task(p.ADC, p.PIN_26, 
                                 p.PIN_27, 
                                 p.PIN_28, 
                                 p.PIN_29, 
-                                10)).unwrap();
-    spawner.spawn(ybsu::task(p.USB)).unwrap();
+                                10)).unwrap();*/
     
-    let mut state = AppState::New;
-    yled::LED.signal(yled::State::Off);
+    
+    
 
+    
+
+}
+
+
+#[embassy_executor::task]
+async fn ui_task() { 
+    let mut state = AppState::New;
     loop {
+        yled::LED.signal(yled::State::Off);
         let btn_1 = ybtn::BTN.wait().await;
         let next_state = 
         match (state, btn_1) {
@@ -104,7 +146,7 @@ async fn main(spawner: Spawner) {
             (_, _) => state,};
         
 
-        if state != next_state {
+        if next_state != state {
             match next_state {
                 AppState::New       => 
                     {yled::LED.signal(yled::State::Vibrate)},
@@ -115,8 +157,8 @@ async fn main(spawner: Spawner) {
                     {yled::LED.signal(yled::State::Steady);
                     yadc::CONTROL.signal(yadc::State::Record);
                     ydsp::MESG.signal(42);
-                    spawner.spawn(storage_task()).unwrap();}
                 }
+            }
         //STATE.signal(next_state);
         state = next_state;
         }
@@ -124,5 +166,6 @@ async fn main(spawner: Spawner) {
             log::info!("{:?}", result);
         };*/
     }
+
 
 }

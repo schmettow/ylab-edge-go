@@ -1,10 +1,10 @@
 pub mod btn {
     use embassy_time::{Duration, Timer, Instant};
     use embassy_rp::gpio::{AnyPin, Input, Pull};
-    use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::signal::Signal;
     pub enum Event {Press, Short, Long}
-    pub static BTN: Signal<ThreadModeRawMutex, Event> = Signal::new();
+    pub static BTN: Signal<CriticalSectionRawMutex, Event> = Signal::new();
 
 
     #[embassy_executor::task]

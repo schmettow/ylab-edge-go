@@ -8,14 +8,14 @@ pub mod fake {
         pub reading: Reading
     }
     /* result channel */
-    use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::signal::Signal;
-    pub static RESULT: Signal<ThreadModeRawMutex, Result> 
+    pub static RESULT: Signal<CriticalSectionRawMutex, Result> 
     = Signal::new();
     
     /* control channel */
     pub enum State {Ready, Record}
-    pub static CONTROL: Signal<ThreadModeRawMutex, State> 
+    pub static CONTROL: Signal<CriticalSectionRawMutex, State> 
     = Signal::new();
     
     #[embassy_executor::task]
@@ -54,14 +54,14 @@ pub mod fake {
             pub reading: Reading
         }
         /* result channel */
-        use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+        use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
         use embassy_sync::signal::Signal;
-        pub static RESULT: Signal<ThreadModeRawMutex, Result> 
+        pub static RESULT: Signal<CriticalSectionRawMutex, Result> 
         = Signal::new();
         
         /* control channel */
         pub enum State {Ready, Record}
-        pub static CONTROL: Signal<ThreadModeRawMutex, State> 
+        pub static CONTROL: Signal<CriticalSectionRawMutex, State> 
         = Signal::new();
         //type AdcPin: embedded_hal::adc::Channel<embassy_rp::adc::Adc<'static>> + embassy_rp::gpio::Pin;
         

@@ -2,10 +2,10 @@ pub mod led {
     // LED control
     use embassy_time::{Duration, Timer};
     use embassy_rp::gpio::{AnyPin, Output, Level};
-    use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::signal::Signal;
     pub enum State {Vibrate, Blink, Steady, Interrupt, Off}
-    pub static LED: Signal<ThreadModeRawMutex, State> = Signal::new();
+    pub static LED: Signal<CriticalSectionRawMutex, State> = Signal::new();
     
     #[embassy_executor::task]
     pub async fn task(led_pin: AnyPin) {
@@ -60,9 +60,9 @@ pub mod disp {
     };*/
     use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
     // inter-thread communication
-    use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::signal::Signal;
-    pub static MESG: Signal<ThreadModeRawMutex, i32> 
+    pub static MESG: Signal<CriticalSectionRawMutex, i32> 
         = Signal::new();
 
 
