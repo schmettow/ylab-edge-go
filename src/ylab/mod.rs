@@ -6,14 +6,14 @@ pub mod yuio; // YLab UI Output
 pub mod yuii; // YLab UI Input
 pub mod ytfk; // YLab transfer formats & kodices
 
-use embassy_time::Instant;
+// use embassy_time::Instant;
 
-struct Reading {
+/* struct Reading {
     time: Instant,
     reading: [f32]
-}
+}*/
 
-impl fmt::Display for Reading {
+/*impl fmt::Display for Reading {
     // This trait requires `fmt` with this exact signature.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Write strictly the first element into the supplied output
@@ -22,4 +22,4 @@ impl fmt::Display for Reading {
         // is very similar to `println!`.
         write!(f, "{}", self.0)
     }
-}
+}*/
