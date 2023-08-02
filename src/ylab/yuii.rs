@@ -11,7 +11,7 @@ pub mod btn {
     pub async fn task(btn_pin: AnyPin) {
         let mut btn = Input::new(btn_pin, Pull::Up);
         let longpress = 1000;
-        let debounce = 10;
+        let debounce = 50;
 
         loop {
             btn.wait_for_low().await;
