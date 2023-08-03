@@ -2,9 +2,13 @@
 #![no_main]
 #![feature(type_alias_impl_trait)]
 use {defmt_rtt as _, panic_probe as _};
+
+/// # YLab Edge
+/// 
 /// __YLab Edge__ is a sensor recording firmware for the Cytron Maker Pi Pico
 /// board.
-/// # Dependencies
+/// 
+/// ## Dependencies
 /// 
 /// YLab Edge makes use of the Embassy framework, in particular:
 /// 
@@ -50,17 +54,28 @@ use ylab::ytfk::bsu as ybsu;
 /// It lives as its own task, so one can connect multiple sources to multiple sinks,
 /// e.g. storing part of the data on SD card and sending the rest up BSU.
 
+use core::sync::atomic::Ordering;
+use core::sync::atomic::AtomicBool;
+static RECORD: AtomicBool = AtomicBool::new(false);
+
 #[embassy_executor::task]
 async fn storage_task() { 
     loop {
-        let result = yadc::RESULT.wait().await;
-        yled::LED.signal(yled::State::Interrupt);
-        log::info!("{},{},{},{},{}", 
-                result.time.as_millis(), 
-                result.reading.0,
-                result.reading.1,
-                result.reading.2,
-                result.reading.3)
+        //let record = RECORD.lock(|f| f.clone().into_inner());
+        //let record = false;
+        // if record {
+        if RECORD.load(Ordering::Relaxed){
+            let result = yadc::RESULT.wait().await;
+            yled::LED.signal(yled::State::Interrupt);
+            log::info!("{},{},{},{},{}", 
+            result.time.as_millis(), 
+            result.reading.0,
+            result.reading.1,
+            result.reading.2,
+            result.reading.3)
+        } else {
+            let _ = yadc::RESULT.wait().await;
+        }
     };
 }
 
@@ -86,6 +101,13 @@ enum AppState {New, Ready, Record}
 /// in the main task. However, with dual-core the main task is no longer 
 /// async. Since all communication channels are static, this really doesn't matter.
 /// 
+/// The initial state is set and a signal is send to the LED.
+/// The event loop waits for button events (long or short press) 
+/// and changes the states, accordingly.
+/// If an actual state change has occured, the state is signaled to the UI 
+/// and initialized if that is necessary. In this case, entering Record 
+/// starts the sensor sampling.
+/// 
 /// From an architectural point of view, this is a nice setup, too. 
 /// Basically, we are separating the very different tasks of 
 /// peripherals/spawning and ui handling. It would be easy to just plugin a 
@@ -95,7 +117,9 @@ enum AppState {New, Ready, Record}
 /// Conclusion so far: If we take the Embassy promise for granted, that async is zero-cost, 
 /// the separation of functionality into different tasks reduces dependencies. It introduces 
 /// the complexity of signalling.
-/// 
+ 
+static SAMPLE: AtomicBool = AtomicBool::new(false);
+
 #[embassy_executor::task]
 async fn ui_task() { 
     let mut state = AppState::New;
@@ -115,24 +139,26 @@ async fn ui_task() {
             match next_state {
                 AppState::New       => 
                     {yled::LED.signal(yled::State::Vibrate);
+                    SAMPLE.store(false, Ordering::Relaxed);
+                    RECORD.store(false, Ordering::Relaxed);
                     ydsp::MESG.signal(0);},
                 AppState::Ready     => 
                     {yled::LED.signal(yled::State::Blink);
                     yadc::CONTROL.signal(yadc::State::Ready);
+                    SAMPLE.store(true, Ordering::Relaxed);
+                    RECORD.store(false, Ordering::Relaxed);
                     ydsp::MESG.signal(1);
                     },
                 AppState::Record    => 
                     {yled::LED.signal(yled::State::Steady);
                     yadc::CONTROL.signal(yadc::State::Record);
+                    SAMPLE.store(true, Ordering::Relaxed);
+                    RECORD.store(true, Ordering::Relaxed);
                     ydsp::MESG.signal(2);
                 }
             }
-        //STATE.signal(next_state);
         state = next_state;
         }
-        /* if let result = yadc::RESULT.wait().await {
-            log::info!("{:?}", result);
-        };*/
     }
 
 
@@ -141,15 +167,7 @@ async fn ui_task() {
 ///# Main Program
 /// 
 /// The main task starts by collecting the peripherals, 
-/// before they are moved to the individual tasks which are spanwed here. We start with the storage task, 
-/// which just passes on sensor data, when they occur.
-/// 
-/// Then, the initial state is set and a signal is send to the LED.
-/// The event loop waits for button events (long or short press) 
-/// and changes the states, accordingly.
-/// If an actual state change has occured, the state is signaled to the UI 
-/// and initialized if that is necessary. In this case, entering Record 
-/// starts the sensor sampling.
+/// before they are moved to the individual tasks which are spanwed here.
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -161,7 +179,7 @@ fn main() -> ! {
                 p.PIN_27, 
                 p.PIN_28, 
                 p.PIN_29, 
-                10)))
+                1000)))
         )
     });
 
@@ -174,22 +192,6 @@ fn main() -> ! {
         unwrap!(spawner.spawn(ui_task()));
         unwrap!(spawner.spawn(storage_task()));
     });
-
-
-    
-    
-    
-    /* spawner.spawn(yadc::task(p.ADC, p.PIN_26, 
-                                p.PIN_27, 
-                                p.PIN_28, 
-                                p.PIN_29, 
-                                10)).unwrap();*/
-    
-    
-    
-
-    
-
 }
 
 
