@@ -44,27 +44,35 @@ use ylab::yuii::btn as ybtn;
 use ylab::ysns::adc as yadc;
 use ylab::ytfk::bsu as ybsu;
 
+/// ## Storage task
+/// 
 /// The storage task currently connects one sensor two the output channel. 
-/// It lives as its own task, because signals have no means of polling. 
-/// When data is received the LED briefly interrupts.
+/// It lives as its own task, so one can connect multiple sources to multiple sinks,
+/// e.g. storing part of the data on SD card and sending the rest up BSU.
+
 #[embassy_executor::task]
 async fn storage_task() { 
     loop {
         let result = yadc::RESULT.wait().await;
         yled::LED.signal(yled::State::Interrupt);
-        log::info!("{},{}", result.time, result.reading.0);
+        log::info!("{},{},{},{},{}", 
+                result.time.as_millis(), 
+                result.reading.0,
+                result.reading.1,
+                result.reading.2,
+                result.reading.3)
     };
 }
 
 
-
-
-
-///# Main Program
-
-/// The main program orchestrates the input/output, sensors and storage 
-/// using a state machine. 
+/// ## UI task
 /// 
+/// The ui task collects events, e.g. button presses, 
+/// updates the output (LED, display) and controls the
+/// recording task using an atomic lock.
+/// 
+/// The ui orchestrates the input/output, sensors and storage 
+/// using a state machine. 
 /// The allowed states are defines by the enum AppState
 /// Down the line we have to make copies of the AppState. This is why 
 /// a couple of traits need to be derived for AppState.
@@ -74,10 +82,64 @@ async fn storage_task() {
     PartialEq, Eq, )] // testing equality
 enum AppState {New, Ready, Record}
 
-/// A possible variation of this setup is to isolate interaction model
-/// into its own task. If Embassy promise to be zero-cost even on massive multi-threading,
-/// this would make programming very easy. 
+/// In a usual multi-threaded app you would write the interaction model
+/// in the main task. However, with dual-core the main task is no longer 
+/// async. Since all communication channels are static, this really doesn't matter.
+/// 
+/// From an architectural point of view, this is a nice setup, too. 
+/// Basically, we are separating the very different tasks of 
+/// peripherals/spawning and ui handling. It would be easy to just plugin a 
+/// different ui, by just reqriting this task. For example, another ui
+/// could use the RGB led to signal states, or collect commands from a serial console.
+///
+/// Conclusion so far: If we take the Embassy promise for granted, that async is zero-cost, 
+/// the separation of functionality into different tasks reduces dependencies. It introduces 
+/// the complexity of signalling.
+/// 
+#[embassy_executor::task]
+async fn ui_task() { 
+    let mut state = AppState::New;
+    yled::LED.signal(yled::State::Off);
+    loop {
+        let btn_1 = ybtn::BTN.wait().await;
+        let next_state = 
+        match (state, btn_1) {
+            (AppState::New,     ybtn::Event::Short) => AppState::Ready,
+            (AppState::Ready,   ybtn::Event::Short) => AppState::Record, 
+            (AppState::Record,  ybtn::Event::Short) => AppState::Ready,
+            (_,                 ybtn::Event::Long)  => AppState::New,
+            (_, _) => state,};
+        
 
+        if next_state != state {
+            match next_state {
+                AppState::New       => 
+                    {yled::LED.signal(yled::State::Vibrate);
+                    ydsp::MESG.signal(0);},
+                AppState::Ready     => 
+                    {yled::LED.signal(yled::State::Blink);
+                    yadc::CONTROL.signal(yadc::State::Ready);
+                    ydsp::MESG.signal(1);
+                    },
+                AppState::Record    => 
+                    {yled::LED.signal(yled::State::Steady);
+                    yadc::CONTROL.signal(yadc::State::Record);
+                    ydsp::MESG.signal(2);
+                }
+            }
+        //STATE.signal(next_state);
+        state = next_state;
+        }
+        /* if let result = yadc::RESULT.wait().await {
+            log::info!("{:?}", result);
+        };*/
+    }
+
+
+}
+
+///# Main Program
+/// 
 /// The main task starts by collecting the peripherals, 
 /// before they are moved to the individual tasks which are spanwed here. We start with the storage task, 
 /// which just passes on sensor data, when they occur.
@@ -131,41 +193,3 @@ fn main() -> ! {
 }
 
 
-#[embassy_executor::task]
-async fn ui_task() { 
-    let mut state = AppState::New;
-    loop {
-        yled::LED.signal(yled::State::Off);
-        let btn_1 = ybtn::BTN.wait().await;
-        let next_state = 
-        match (state, btn_1) {
-            (AppState::New,     ybtn::Event::Short) => AppState::Ready,
-            (AppState::Ready,   ybtn::Event::Short) => AppState::Record, 
-            (AppState::Record,  ybtn::Event::Short) => AppState::Ready,
-            (_,                 ybtn::Event::Long)  => AppState::New,
-            (_, _) => state,};
-        
-
-        if next_state != state {
-            match next_state {
-                AppState::New       => 
-                    {yled::LED.signal(yled::State::Vibrate)},
-                AppState::Ready     => 
-                    {yled::LED.signal(yled::State::Blink);
-                    yadc::CONTROL.signal(yadc::State::Ready)},
-                AppState::Record    => 
-                    {yled::LED.signal(yled::State::Steady);
-                    yadc::CONTROL.signal(yadc::State::Record);
-                    ydsp::MESG.signal(42);
-                }
-            }
-        //STATE.signal(next_state);
-        state = next_state;
-        }
-        /* if let result = yadc::RESULT.wait().await {
-            log::info!("{:?}", result);
-        };*/
-    }
-
-
-}
