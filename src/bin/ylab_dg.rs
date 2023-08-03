@@ -36,6 +36,7 @@ use embassy_rp::gpio::Pin;
 //use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 //use embassy_sync::signal::Signal;
 
+use ylab::yuio::disp::FourLines;
 /// Furthermore, YLab Edge brings its own high-level modules
 /// for rapidly developing interactive data collection devices.
 /// 
@@ -124,6 +125,8 @@ static SAMPLE: AtomicBool = AtomicBool::new(false);
 async fn ui_task() { 
     let mut state = AppState::New;
     yled::LED.signal(yled::State::Off);
+    let disp_text: ydsp::FourLines = [ "YLab".into(), "".into(), "".into(),"".into()];
+    ydsp::TEXT.signal(disp_text);
     loop {
         let btn_1 = ybtn::BTN.wait().await;
         let next_state = 
@@ -137,25 +140,29 @@ async fn ui_task() {
 
         if next_state != state {
             match next_state {
-                AppState::New       => 
-                    {yled::LED.signal(yled::State::Vibrate);
+                AppState::New       => {
+                    yled::LED.signal(yled::State::Vibrate);
                     SAMPLE.store(false, Ordering::Relaxed);
                     RECORD.store(false, Ordering::Relaxed);
-                    ydsp::MESG.signal(0);},
-                AppState::Ready     => 
-                    {yled::LED.signal(yled::State::Blink);
+                    let disp_text: ydsp::FourLines = [ "New".into(), "".into(), "".into(),"".into()];
+                    ydsp::TEXT.signal(disp_text);
+                    },
+                AppState::Ready     => {
+                    yled::LED.signal(yled::State::Blink);
                     yadc::CONTROL.signal(yadc::State::Ready);
                     SAMPLE.store(true, Ordering::Relaxed);
                     RECORD.store(false, Ordering::Relaxed);
-                    ydsp::MESG.signal(1);
+                    let disp_text: ydsp::FourLines = [ "Ready".into(), "".into(), "".into(),"".into()];
+                    ydsp::TEXT.signal(disp_text);
                     },
-                AppState::Record    => 
-                    {yled::LED.signal(yled::State::Steady);
+                AppState::Record    => {
+                    yled::LED.signal(yled::State::Steady);
                     yadc::CONTROL.signal(yadc::State::Record);
                     SAMPLE.store(true, Ordering::Relaxed);
                     RECORD.store(true, Ordering::Relaxed);
-                    ydsp::MESG.signal(2);
-                }
+                    let disp_text: ydsp::FourLines = [ "Record".into(), "".into(), "".into(),"".into()];
+                    ydsp::TEXT.signal(disp_text);
+                    }
             }
         state = next_state;
         }
@@ -179,7 +186,7 @@ fn main() -> ! {
                 p.PIN_27, 
                 p.PIN_28, 
                 p.PIN_29, 
-                1000)))
+                1500)))
         )
     });
 

@@ -1,3 +1,4 @@
+
 pub mod led {
     // LED control
     use embassy_time::{Duration, Timer};
@@ -9,9 +10,8 @@ pub mod led {
     
     #[embassy_executor::task]
     pub async fn task(led_pin: AnyPin) {
-        let mut led = 
-            Output::new(led_pin, 
-        Level::Low);
+        let mut led 
+                = Output::new(led_pin, Level::Low);
         loop {  
                 let next_signal = LED.wait().await;
                 match  next_signal {
@@ -50,7 +50,8 @@ pub mod disp {
     use embassy_rp::i2c::{self, Config, InterruptHandler};
     use embassy_rp::peripherals::{PIN_4, PIN_5, I2C0};
     use embassy_rp::bind_interrupts;
-    use itoa;
+    pub use heapless::String;
+    // use itoa;
     /* use embedded_graphics::{ // <--- reactivate graphic output
         pixelcolor::BinaryColor,
         prelude::*,
@@ -62,10 +63,12 @@ pub mod disp {
     // inter-thread communication
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::signal::Signal;
-    pub static MESG: Signal<CriticalSectionRawMutex, i32> 
-        = Signal::new();
 
-
+    pub type OneLine = String<20>;
+    pub type FourLines = [OneLine; 4];
+    
+    pub static TEXT: Signal<CriticalSectionRawMutex, FourLines> 
+                = Signal::new();
 
     // Text display
     use core::fmt::Write;
@@ -91,10 +94,13 @@ pub mod disp {
         let _ = display.write_str("YLab");
                 
         loop {
-            let mesg: i32 = MESG.wait().await;
+            let mesg: FourLines = TEXT.wait().await;
             let _ = display.clear();
-            let mut str_conv = itoa::Buffer::new(); // conversion to string
-            let _ = display.write_str(str_conv.format(mesg));
+            //let mut str_conv = itoa::Buffer::new(); // conversion to string
+            for row in mesg {
+                let _ = display.write_str(row.as_str());
+            }
+            
         }
     }
 }
