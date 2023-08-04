@@ -23,9 +23,6 @@ mod ylab_ads1115 {
         pub reading: R,
     }
     
-    type ADSRead = (f32, f32, f32, f32);
-    type ADSResult = SensorResult<ADSRead>;
-    pub static ADS_RESULT:Signal<ThreadModeRawMutex, ADSResult> = Signal::new();
     // I2C    
     use embassy_rp::i2c::{self, Config, InterruptHandler};
     use embassy_rp::peripherals::{PIN_14, PIN_15, I2C1};
@@ -33,9 +30,11 @@ mod ylab_ads1115 {
     use embedded_ads111x as ads111x;
     use embedded_ads111x::InputMultiplexer::{AIN0GND, AIN1GND, AIN2GND, AIN3GND};
     // ITC
-    use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::signal::Signal;
-
+    type ADSRead = (f32, f32, f32, f32);
+    type ADSResult = SensorResult<ADSRead>;
+    pub static ADS_RESULT:Signal<CriticalSectionRawMutex, ADSResult> = Signal::new();
 
     #[embassy_executor::task]
     pub async fn ads_task(contr: I2C1, 
