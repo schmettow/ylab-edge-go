@@ -14,7 +14,7 @@ use {defmt_rtt as _, panic_probe as _};
 /* YLAB sensor */
 
 /* ADS1115 Sensor */
-mod ylab_ads1115 {
+mod ads1115 {
     /* Sensor Generics */
     use embassy_time::{Duration, Ticker, Instant};
     
@@ -32,9 +32,9 @@ mod ylab_ads1115 {
     // ITC
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::signal::Signal;
-    type ADSRead = (f32, f32, f32, f32);
-    type ADSResult = SensorResult<ADSRead>;
-    pub static ADS_RESULT:Signal<CriticalSectionRawMutex, ADSResult> = Signal::new();
+    type Reading = (f32, f32, f32, f32);
+    type Measure = SensorResult<Reading>;
+    pub static RESULT:Signal<CriticalSectionRawMutex, Measure> = Signal::new();
 
     #[embassy_executor::task]
     pub async fn ads_task(contr: I2C1, 
@@ -62,15 +62,15 @@ mod ylab_ads1115 {
         
         let mut ticker = Ticker::every(Duration::from_hz(hz));
         loop {
-            let reading: ADSRead =
+            let reading: Reading =
                 (ads.read_single_voltage(Some(AIN0GND)).unwrap(),
                 ads.read_single_voltage(Some(AIN1GND)).unwrap(),
                 ads.read_single_voltage(Some(AIN2GND)).unwrap(),
                 ads.read_single_voltage(Some(AIN3GND)).unwrap());
             let now = Instant::now();
             let result = 
-                ADSResult{time: now, reading: reading};       
-            ADS_RESULT.signal(result);
+                Measure{time: now, reading: reading};       
+            RESULT.signal(result);
             ticker.next().await;
             }
     }
@@ -95,10 +95,10 @@ async fn main(spawner: Spawner) {
     let scl: PIN_15 = p.PIN_15;
     let hz = 2;
     
-    spawner.spawn(ylab_ads1115::ads_task(i2c_contr, sda, scl, hz)).unwrap();
+    spawner.spawn(ads1115::ads_task(i2c_contr, sda, scl, hz)).unwrap();
         
     loop {
-        let result = ylab_ads1115::ADS_RESULT.wait().await;
+        let result = ads1115::RESULT.wait().await;
         let _when = result.time;
         let _what = result.reading;
         led.toggle();
