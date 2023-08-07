@@ -37,7 +37,7 @@ mod ads1115 {
     pub static RESULT:Signal<CriticalSectionRawMutex, Measure> = Signal::new();
 
     #[embassy_executor::task]
-    pub async fn ads_task(contr: I2C1, 
+    pub async fn task(contr: I2C1, 
                       sda: PIN_14, 
                       scl: PIN_15,
                       hz: u64) {
@@ -63,7 +63,7 @@ mod ads1115 {
         let mut ticker = Ticker::every(Duration::from_hz(hz));
         loop {
             let reading: Reading =
-                (ads.read_single_voltage(Some(AIN0GND)).unwrap(),
+               (ads.read_single_voltage(Some(AIN0GND)).unwrap(),
                 ads.read_single_voltage(Some(AIN1GND)).unwrap(),
                 ads.read_single_voltage(Some(AIN2GND)).unwrap(),
                 ads.read_single_voltage(Some(AIN3GND)).unwrap());
@@ -95,7 +95,7 @@ async fn main(spawner: Spawner) {
     let scl: PIN_15 = p.PIN_15;
     let hz = 2;
     
-    spawner.spawn(ads1115::ads_task(i2c_contr, sda, scl, hz)).unwrap();
+    spawner.spawn(ads1115::task(i2c_contr, sda, scl, hz)).unwrap();
         
     loop {
         let result = ads1115::RESULT.wait().await;
