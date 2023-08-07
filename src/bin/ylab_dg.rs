@@ -36,7 +36,7 @@ use embassy_rp::gpio::Pin;
 //use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 //use embassy_sync::signal::Signal;
 
-use ylab::yuio::disp::FourLines;
+// use ylab::yuio::disp::FourLines;
 /// Furthermore, YLab Edge brings its own high-level modules
 /// for rapidly developing interactive data collection devices.
 /// 
@@ -44,9 +44,14 @@ use ylab::yuio::disp::FourLines;
 use ylab::yuio::led as yled;
 use ylab::yuio::disp as ydsp;
 use ylab::yuii::btn as ybtn;
-/// + sensors (built-in ADC)
-/// + data transport/storage
+/// + four built-in ADC sensors
 use ylab::ysns::adc as yadc;
+/// + four ADCs on a ADS1115;
+use ylab::ysns::ads1115 as yads;
+
+/// + data transport/storage
+//use ylab::ysns::yxz as yxz;
+//use ylab::ysns::ads1115 as yads;
 use ylab::ytfk::bsu as ybsu;
 
 /// ## Storage task
@@ -66,16 +71,17 @@ async fn storage_task() {
         //let record = false;
         // if record {
         if RECORD.load(Ordering::Relaxed){
-            let result = yadc::RESULT.wait().await;
+            let result 
+                = yads::RESULT.wait().await;
             yled::LED.signal(yled::State::Interrupt);
             log::info!("{},{},{},{},{}", 
-            result.time.as_millis(), 
-            result.reading.0,
-            result.reading.1,
-            result.reading.2,
-            result.reading.3)
+                result.time.as_millis(), 
+                result.reading[0],
+                result.reading[1],
+                result.reading[2],
+                result.reading[3])
         } else {
-            let _ = yadc::RESULT.wait().await;
+            let _ = yads::RESULT.wait().await;
         }
     };
 }
@@ -176,17 +182,26 @@ async fn ui_task() {
 /// The main task starts by collecting the peripherals, 
 /// before they are moved to the individual tasks which are spanwed here.
 
+
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
     spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
         let executor1 = EXECUTOR1.init(Executor::new());
-        executor1.run(|spawner|
-            unwrap!(spawner.spawn(yadc::task(p.ADC, p.PIN_26, 
+        executor1.run(|spawner|{
+            unwrap!(spawner.spawn(yadc::task(
+                p.ADC, 
+                p.PIN_26, 
                 p.PIN_27, 
                 p.PIN_28, 
                 p.PIN_29, 
-                1500)))
+                1500)));
+           unwrap!(spawner.spawn(yads::task(
+                p.I2C1, 
+                p.PIN_3, 
+                p.PIN_2, 
+                2000)));
+            }
         )
     });
 
