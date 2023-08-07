@@ -47,6 +47,7 @@ usbd-serial = "0.1.1"
 rp2040-hal = "0.8.2"
 usb-device = "0.2.9"
 embedded-sdmmc = "0.5.0"
+nb = "1.1.0"
 
 ## network drivers for cyw43 (pico W) or wiznet w5500
 # embassy-net = { version = "0.1.0", features = ["defmt", "nightly", "tcp", "dhcpv4", "medium-ethernet"] }
