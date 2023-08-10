@@ -60,12 +60,12 @@ use ylab::ytfk::bsu as ybsu;
 /// It lives as its own task, so one can connect multiple sources to multiple sinks,
 /// e.g. storing part of the data on SD card and sending the rest up BSU.
 
-use core::sync::atomic::Ordering;
-use core::sync::atomic::AtomicBool;
-static RECORD: AtomicBool = AtomicBool::new(false);
+// use core::sync::atomic::Ordering;
+// use core::sync::atomic::AtomicBool;
+// static RECORD: AtomicBool = AtomicBool::new(false);
 
-#[embassy_executor::task]
-async fn storage_task() { 
+/* #[embassy_executor::task]
+async fn _storage_task() { 
     loop {
         //let record = RECORD.lock(|f| f.clone().into_inner());
         //let record = false;
@@ -79,12 +79,12 @@ async fn storage_task() {
                 result.reading[0],
                 result.reading[1],
                 result.reading[2],
-                result.reading[3])
+                result.reading[3]);
         } else {
             let _ = yads::RESULT.wait().await;
         }
     };
-}
+}*/
 
 
 /// ## UI task
@@ -124,11 +124,11 @@ enum AppState {New, Ready, Record}
 /// Conclusion so far: If we take the Embassy promise for granted, that async is zero-cost, 
 /// the separation of functionality into different tasks reduces dependencies. It introduces 
 /// the complexity of signalling.
- 
-static SAMPLE: AtomicBool = AtomicBool::new(false);
+
+pub use core::sync::atomic::Ordering;
 
 #[embassy_executor::task]
-async fn ui_task() { 
+async fn control_task() { 
     let mut state = AppState::New;
     yled::LED.signal(yled::State::Off);
     let disp_text: ydsp::FourLines = [ "YLab".into(), "".into(), "".into(),"".into()];
@@ -148,24 +148,24 @@ async fn ui_task() {
             match next_state {
                 AppState::New       => {
                     yled::LED.signal(yled::State::Vibrate);
-                    SAMPLE.store(false, Ordering::Relaxed);
-                    RECORD.store(false, Ordering::Relaxed);
+                    yads::RECORD.store(false, Ordering::Relaxed);
+                    //RECORD.store(false, Ordering::Relaxed);
                     let disp_text: ydsp::FourLines = [ "New".into(), "".into(), "".into(),"".into()];
                     ydsp::TEXT.signal(disp_text);
                     },
                 AppState::Ready     => {
                     yled::LED.signal(yled::State::Blink);
-                    yadc::CONTROL.signal(yadc::State::Ready);
-                    SAMPLE.store(true, Ordering::Relaxed);
-                    RECORD.store(false, Ordering::Relaxed);
+                    //yadc::CONTROL.signal(yadc::State::Ready);
+                    yads::RECORD.store(false, Ordering::Relaxed);
+                    yadc::RECORD.store(false, Ordering::Relaxed);
                     let disp_text: ydsp::FourLines = [ "Ready".into(), "".into(), "".into(),"".into()];
                     ydsp::TEXT.signal(disp_text);
                     },
                 AppState::Record    => {
                     yled::LED.signal(yled::State::Steady);
-                    yadc::CONTROL.signal(yadc::State::Record);
-                    SAMPLE.store(true, Ordering::Relaxed);
-                    RECORD.store(true, Ordering::Relaxed);
+                    //yadc::CONTROL.signal(yadc::State::Record);
+                    yads::RECORD.store(true, Ordering::Relaxed);
+                    yadc::RECORD.store(true, Ordering::Relaxed);
                     let disp_text: ydsp::FourLines = [ "Record".into(), "".into(), "".into(),"".into()];
                     ydsp::TEXT.signal(disp_text);
                     }
@@ -195,12 +195,12 @@ fn main() -> ! {
                 p.PIN_27, 
                 p.PIN_28, 
                 p.PIN_29, 
-                1500)));
+                500)));
            unwrap!(spawner.spawn(yads::task(
                 p.I2C1, 
                 p.PIN_3, 
                 p.PIN_2, 
-                2000)));
+                100)));
             }
         )
     });
@@ -211,8 +211,8 @@ fn main() -> ! {
         unwrap!(spawner.spawn(ydsp::task(p.I2C0, p.PIN_4, p.PIN_5)));
         unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
         unwrap!(spawner.spawn(ybsu::task(p.USB)));
-        unwrap!(spawner.spawn(ui_task()));
-        unwrap!(spawner.spawn(storage_task()));
+        unwrap!(spawner.spawn(control_task()));
+        //unwrap!(spawner.spawn(storage_task()));
     });
 }
 
