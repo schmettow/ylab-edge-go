@@ -39,9 +39,6 @@ pub mod fake {
         use embassy_rp::peripherals::{PIN_26, PIN_27, PIN_28, PIN_29, ADC};
         use embassy_rp::adc::{Adc, Config, InterruptHandler};
         use embassy_rp::bind_interrupts;
-        bind_interrupts!(struct Irqs {
-            ADC_IRQ_FIFO => InterruptHandler;
-        });
 
         /* data */
         pub struct SensorResult<R> { // <-- redundant
@@ -59,10 +56,12 @@ pub mod fake {
         pub static RESULT: Signal<CriticalSectionRawMutex, Result> 
         = Signal::new();
         
-        /* control channel */
-        pub enum State {Ready, Record}
-        pub static CONTROL: Signal<CriticalSectionRawMutex, State> 
-        = Signal::new();
+        /* control channels */
+        pub use core::sync::atomic::Ordering;
+        use core::sync::atomic::AtomicBool;
+        pub static READY: AtomicBool = AtomicBool::new(false);
+        pub static RECORD: AtomicBool = AtomicBool::new(false);
+ 
         //type AdcPin: embedded_hal::adc::Channel<embassy_rp::adc::Adc<'static>> + embassy_rp::gpio::Pin;
         
         #[embassy_executor::task]
@@ -74,40 +73,40 @@ pub mod fake {
                         mut adc_3: PIN_29,
                         hz: u64) {
             //let adc: Adc<'_> = Adc::new(p.ADC, Irqs, Config::default());
+            bind_interrupts!(struct Irqs {
+                ADC_IRQ_FIFO => InterruptHandler;});
             let mut adc: Adc<'_> = Adc::new(adc_contr, Irqs, Config::default());
             let mut ticker = Ticker::every(Duration::from_hz(hz));
-            //let _state: State = State::Ready;
+            let mut reading: Reading;
+            let mut result: SensorResult<Reading>; 
             loop {
-               /* match CONTROL.wait().await { 
-                    State::Ready => {},
-                    State::Record => {*/
-                let reading: Reading = [
-                    adc.read(&mut adc_0).await,
-                    adc.read(&mut adc_1).await,
-                    adc.read(&mut adc_2).await,
-                    adc.read(&mut adc_3).await, ];
-                let now: Instant = Instant::now();
-                let result = Result{time: now, 
-                                            reading: reading};
-                RESULT.signal(result);
-                ticker.next()
-                .await;
-                  //  },
-                //}
+                ticker.next().await;
+                if RECORD.load(Ordering::Relaxed){
+                    reading = [
+                        adc.read(&mut adc_0).await,
+                        adc.read(&mut adc_1).await,
+                        adc.read(&mut adc_2).await,
+                        adc.read(&mut adc_3).await, ];
+                    result = SensorResult{
+                                time: Instant::now(), 
+                                reading: reading};
+                    
+                    log::info!("{},C,{},{},{},{}", 
+                        result.time.as_micros(),
+                        result.reading[0],
+                        result.reading[1],
+                        result.reading[2],
+                        result.reading[3],);
+                    };
+                }                
             }
         }
-    }
 
 
 /* ADS1115 Sensor */
 pub mod ads1115 {
     /* Sensor Generics */
     use embassy_time::{Duration, Ticker, Instant};
-    
-    pub struct SensorResult<R> {
-        pub time: Instant,
-        pub reading: R,
-    }
     
     // I2C    
     use embassy_rp::i2c::{self, Config, InterruptHandler};
@@ -116,7 +115,7 @@ pub mod ads1115 {
     //use embedded_ads111x as ads111x;
     //use embedded_ads111x::InputMultiplexer::{AIN0GND, AIN1GND, AIN2GND, AIN3GND};
     use embedded_hal::adc::OneShot;
-    use ads1x1x::{channel, Ads1x1x, SlaveAddr, DataRate16Bit, DataRate12Bit};
+    use ads1x1x::{channel, Ads1x1x, SlaveAddr, DataRate12Bit};
     use nb::block;
 
     // ITC
@@ -124,10 +123,20 @@ pub mod ads1115 {
     use embassy_sync::signal::Signal;
 
     // Data
+    pub struct SensorResult<R> {
+        pub time: Instant,
+        pub reading: R,
+    }
     type Reading = [i16;4];
     type Measure = SensorResult<Reading>;
     pub static RESULT:Signal<CriticalSectionRawMutex, Measure> = Signal::new();
 
+    /* control channels */
+    pub use core::sync::atomic::Ordering;
+    use core::sync::atomic::AtomicBool;
+    pub static READY: AtomicBool = AtomicBool::new(false);
+    pub static RECORD: AtomicBool = AtomicBool::new(false);
+ 
     #[embassy_executor::task]
     pub async fn task(contr: I2C1, 
                       scl: PIN_3, 
@@ -149,26 +158,34 @@ pub mod ads1115 {
         ads.set_data_rate(DataRate12Bit::Sps3300).unwrap();
         //ads.into_continuous();
         let mut ticker = Ticker::every(Duration::from_hz(hz));
+        let mut reading: Reading; //= [0,0,0,0];
+        let mut result: SensorResult<Reading>;// = SensorResult { time: Instant::now(), reading: reading};
+        READY.store(true, Ordering::Relaxed);
         loop {
-            let reading: Reading = [
-                block!(ads.read(&mut channel::SingleA0)).unwrap(),
-                block!(ads.read(&mut channel::SingleA1)).unwrap(),
-                block!(ads.read(&mut channel::SingleA2)).unwrap(),
-                block!(ads.read(&mut channel::SingleA3)).unwrap(),
-            ];
-            let now = Instant::now();
-            let result = 
-                Measure{time: now, reading: reading};       
-            RESULT.signal(result);
             ticker.next().await;
+            if RECORD.load(Ordering::Relaxed){
+                reading = [
+                    block!(ads.read(&mut channel::SingleA0)).unwrap(),
+                    block!(ads.read(&mut channel::SingleA1)).unwrap(),
+                    block!(ads.read(&mut channel::SingleA2)).unwrap(),
+                    block!(ads.read(&mut channel::SingleA3)).unwrap(),];
+                result = SensorResult{time: Instant::now(), 
+                                      reading: reading};
+                    //RESULT.signal(result);
+                log::info!("{},S,{},{},{},{}", 
+                    result.time.as_micros(),
+                    result.reading[0],
+                    result.reading[1],
+                    result.reading[2],
+                    result.reading[3],);
+                    };
+                }
             }
     }
                            
-}
 
 
-
-    /* pub mod yxz {
+    /* pub mod yxz_lsm6 {
         /* Sensor Generics */
         use embassy_time::{Duration, Ticker, Instant};
         
