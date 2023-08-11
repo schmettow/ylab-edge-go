@@ -36,9 +36,9 @@ pub mod fake {
 
     pub mod adc {
         use embassy_time::{Duration, Ticker, Instant};
-        use embassy_rp::peripherals::{PIN_26, PIN_27, PIN_28, PIN_29, ADC};
-        use embassy_rp::adc::{Adc, Config, InterruptHandler};
-        use embassy_rp::bind_interrupts;
+        use embassy_rp::peripherals::{PIN_26, PIN_27, PIN_28, PIN_29};
+        use embassy_rp::adc::{Adc};
+        //use embassy_rp::bind_interrupts;
 
         /* data */
         pub struct SensorResult<R> { // <-- redundant
@@ -65,17 +65,13 @@ pub mod fake {
         //type AdcPin: embedded_hal::adc::Channel<embassy_rp::adc::Adc<'static>> + embassy_rp::gpio::Pin;
         
         #[embassy_executor::task]
-        pub async fn task(//mut adc: Adc<'static>, 
-                        adc_contr: ADC,
+        pub async fn task(mut adc: Adc<'static>,
                         mut adc_0: PIN_26,
                         mut adc_1: PIN_27,
                         mut adc_2: PIN_28,
                         mut adc_3: PIN_29,
                         hz: u64) {
             //let adc: Adc<'_> = Adc::new(p.ADC, Irqs, Config::default());
-            bind_interrupts!(struct Irqs {
-                ADC_IRQ_FIFO => InterruptHandler;});
-            let mut adc: Adc<'_> = Adc::new(adc_contr, Irqs, Config::default());
             let mut ticker = Ticker::every(Duration::from_hz(hz));
             let mut reading: Reading;
             let mut result: SensorResult<Reading>; 
@@ -109,9 +105,9 @@ pub mod ads1115 {
     use embassy_time::{Duration, Ticker, Instant};
     
     // I2C    
-    use embassy_rp::i2c::{self, Config, InterruptHandler};
-    use embassy_rp::peripherals::{PIN_2, PIN_3, I2C1};
-    use embassy_rp::bind_interrupts;
+    use embassy_rp::i2c::{self};
+    use embassy_rp::peripherals::{I2C1};
+    // use embassy_rp::bind_interrupts;
     //use embedded_ads111x as ads111x;
     //use embedded_ads111x::InputMultiplexer::{AIN0GND, AIN1GND, AIN2GND, AIN3GND};
     use embedded_hal::adc::OneShot;
@@ -138,22 +134,21 @@ pub mod ads1115 {
     pub static RECORD: AtomicBool = AtomicBool::new(false);
  
     #[embassy_executor::task]
-    pub async fn task(contr: I2C1, 
-                      scl: PIN_3, 
-                      sda: PIN_2,
+    pub async fn task(i2c: i2c::I2c<'static, I2C1, i2c::Async>,
                       hz: u64) {
         // ads1115
         // Init I2C
-        bind_interrupts!(struct Irqs {
+        /* bind_interrupts!(struct Irqs {
             I2C1_IRQ => InterruptHandler<I2C1>;
-        });        
-        let i2c: i2c::I2c<'_, I2C1, i2c::Async> = 
+        });*/        
+        /* let i2c: i2c::I2c<'_, I2C1, i2c::Async> = 
             i2c::I2c::new_async(contr, 
                                 scl, sda, 
                                 Irqs, 
-                                Config::default());
+                                Config::default());*/
         let address = SlaveAddr::default();
-        let mut ads = Ads1x1x::new_ads1015(i2c, address);
+        let mut ads 
+                = Ads1x1x::new_ads1015(i2c, address);
         // ads.set_data_rate(DataRate16Bit::Sps860).unwrap();
         ads.set_data_rate(DataRate12Bit::Sps3300).unwrap();
         //ads.into_continuous();

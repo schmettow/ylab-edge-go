@@ -177,30 +177,61 @@ async fn control_task() {
 
 }
 
+/* bind_interrupts!(struct Irqs {
+    I2C1_IRQ => InterruptHandler<I2C1>;
+});*/ 
+
 ///# Main Program
 /// 
 /// The main task starts by collecting the peripherals, 
 /// before they are moved to the individual tasks which are spanwed here.
 
+use embassy_rp::i2c; // <---
+//use embassy_rp::i2c::{self};//, Config, InterruptHandler}; // <---
+use embassy_rp::peripherals::{I2C0, I2C1};
+use embassy_rp::adc;
+//use embassy_rp::peripherals::{ADC, PIN_26, PIN_27, PIN_28, PIN_29,};
+//use embassy_rp::adc::{Adc, Config, InterruptHandler}; // <---
+use embassy_rp::bind_interrupts;
+bind_interrupts!(struct Irqs {
+    I2C0_IRQ => i2c::InterruptHandler<I2C0>;
+    I2C1_IRQ => i2c::InterruptHandler<I2C1>;
+    ADC_IRQ_FIFO => adc::InterruptHandler;
+});
+
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
+    // Init I2C
+    let i2c1: i2c::I2c<'_, I2C1, i2c::Async>
+        = i2c::I2c::new_async(p.I2C1, 
+                            p.PIN_3, p.PIN_2, 
+                            Irqs,//bind_interrupts!(struct Irqs {I2C1_IRQ => InterruptHandler<I2C1>;}), 
+                            i2c::Config::default());
+    let i2c0: i2c::I2c<'_, I2C0, i2c::Async>
+        = i2c::I2c::new_async(p.I2C0, 
+                            p.PIN_5, p.PIN_4, 
+                            Irqs,//bind_interrupts!(struct Irqs {I2C0_IRQ => InterruptHandler<I2C0>;}), 
+                            i2c::Config::default());
+    // ADC
+    let adc0: adc::Adc<'_> 
+            = adc::Adc::new( p.ADC, 
+                        Irqs,//bind_interrupts!(struct Irqs {ADC_IRQ_FIFO => InterruptHandler<ADC>;}), 
+                        adc::Config::default());
+
     spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
-        let executor1 = EXECUTOR1.init(Executor::new());
+        let executor1 
+            = EXECUTOR1.init(Executor::new());
         executor1.run(|spawner|{
             unwrap!(spawner.spawn(yadc::task(
-                p.ADC, 
+                adc0, 
                 p.PIN_26, 
                 p.PIN_27, 
                 p.PIN_28, 
                 p.PIN_29, 
                 500)));
-           unwrap!(spawner.spawn(yads::task(
-                p.I2C1, 
-                p.PIN_3, 
-                p.PIN_2, 
-                100)));
+           unwrap!(spawner.spawn(yads::task(i2c1, 100)));
             }
         )
     });
@@ -208,7 +239,7 @@ fn main() -> ! {
     let executor0 = EXECUTOR0.init(Executor::new());
     executor0.run(|spawner| {   
         unwrap!(spawner.spawn(yled::task(p.PIN_25.degrade())));
-        unwrap!(spawner.spawn(ydsp::task(p.I2C0, p.PIN_4, p.PIN_5)));
+        unwrap!(spawner.spawn(ydsp::task(i2c0)));
         unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
         unwrap!(spawner.spawn(ybsu::task(p.USB)));
         unwrap!(spawner.spawn(control_task()));
