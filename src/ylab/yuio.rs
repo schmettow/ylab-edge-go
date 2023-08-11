@@ -47,9 +47,9 @@ pub mod led {
 
 pub mod disp {
     // I2C
-    use embassy_rp::i2c::{self, Config, InterruptHandler};
-    use embassy_rp::peripherals::{PIN_4, PIN_5, I2C0};
-    use embassy_rp::bind_interrupts;
+    use embassy_rp::i2c::{self};
+    use embassy_rp::peripherals::I2C0;
+    //use embassy_rp::bind_interrupts;
     pub use heapless::String;
     // use itoa;
     /* use embedded_graphics::{ // <--- reactivate graphic output
@@ -74,17 +74,18 @@ pub mod disp {
     use core::fmt::Write;
 
     #[embassy_executor::task]
-    pub async fn task(contr: I2C0, sda: PIN_4, scl: PIN_5) {
+    pub async fn task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
         // Init I2C display
-        bind_interrupts!(struct Irqs {
+        /* bind_interrupts!(struct Irqs {
             I2C0_IRQ => InterruptHandler<I2C0>;
-        });        
-        let i2c: i2c::I2c<'_, I2C0, i2c::Async> = 
+        });*/        
+        /* let i2c: i2c::I2c<'_, I2C0, i2c::Async> = 
             i2c::I2c::new_async(contr, 
                                 scl, sda, 
                                 Irqs, 
-                                Config::default());
-        let interface = I2CDisplayInterface::new(i2c);
+                                Config::default());*/
+        let interface 
+            = I2CDisplayInterface::new(i2c);
         let mut display =
             Ssd1306::new(interface, 
                     DisplaySize128x64, 
