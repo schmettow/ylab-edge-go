@@ -94,6 +94,86 @@ enum AppState {New, Ready, Record}
 /// Conclusion so far: If we take the Embassy promise for granted, that async is zero-cost, 
 /// the separation of functionality into different tasks reduces dependencies. It introduces 
 /// the complexity of signalling.
+///
+/// ## Init
+/// 
+/// + Initializing peripherals 
+/// + spawning tasks
+/// + assigning periphs to tasks
+
+///# Main Program
+/// 
+/// The main task starts by preparing the peripherals, 
+/// before they are moved to the individual tasks which are spanwed here.
+
+use embassy_rp::i2c;
+use embassy_rp::peripherals::{I2C0, I2C1};
+use embassy_rp::adc;
+use embassy_rp::bind_interrupts;
+bind_interrupts!(struct Irqs {
+    I2C0_IRQ => i2c::InterruptHandler<I2C0>;
+    I2C1_IRQ => i2c::InterruptHandler<I2C1>;
+    ADC_IRQ_FIFO => adc::InterruptHandler;
+});
+
+
+#[cortex_m_rt::entry]
+fn init() -> ! {
+    let p = embassy_rp::init(Default::default());
+    // Activating both I2C controllers
+    let i2c1: i2c::I2c<'_, I2C1, i2c::Async>
+        = i2c::I2c::new_async(p.I2C1, 
+                            p.PIN_3, p.PIN_2, 
+                            Irqs,
+                            i2c::Config::default());
+    let i2c0: i2c::I2c<'_, I2C0, i2c::Async>
+        = i2c::I2c::new_async(p.I2C0, 
+                            //p.PIN_1, p.PIN_0, 
+                            //p.PIN_5, p.PIN_4, 
+                            p.PIN_9, p.PIN_8,
+                            Irqs,
+                            i2c::Config::default());
+    // Activating the built-in ADC controller
+    let adc0: adc::Adc<'_> 
+            = adc::Adc::new( p.ADC, 
+                        Irqs,
+                        adc::Config::default());
+
+    spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
+        let executor1 
+            = EXECUTOR1.init(Executor::new());
+        executor1.run(|spawner|{
+            unwrap!(spawner.spawn(yadc::task(
+                adc0, 
+                p.PIN_26, 
+                p.PIN_27, 
+                p.PIN_28, 
+                p.PIN_29, 
+                1)));
+            unwrap!(spawner.spawn(yads1::task(i2c1, 1)));
+            unwrap!(spawner.spawn(yads0::task(i2c0, 1)));
+            }
+        )
+    });
+
+    let executor0 = EXECUTOR0.init(Executor::new());
+    executor0.run(|spawner| {   
+        unwrap!(spawner.spawn(yled::task(p.PIN_25.degrade())));
+        //unwrap!(spawner.spawn(ydsp::task(i2c0)));
+        unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
+        unwrap!(spawner.spawn(ybsu::task(p.USB)));
+        unwrap!(spawner.spawn(control_task()));
+    });
+}
+
+/// ## Control task
+/// 
+/// + capturing button presses
+/// + sending commands to the other tasks
+/// + giving signals via LED
+/// + put text on a display
+/// 
+/// 
 
 pub use core::sync::atomic::Ordering;
 
@@ -150,70 +230,4 @@ async fn control_task() {
 
 
 }
-
-///# Main Program
-/// 
-/// The main task starts by preparing the peripherals, 
-/// before they are moved to the individual tasks which are spanwed here.
-
-use embassy_rp::i2c;
-use embassy_rp::peripherals::{I2C0, I2C1};
-use embassy_rp::adc;
-use embassy_rp::bind_interrupts;
-bind_interrupts!(struct Irqs {
-    I2C0_IRQ => i2c::InterruptHandler<I2C0>;
-    I2C1_IRQ => i2c::InterruptHandler<I2C1>;
-    ADC_IRQ_FIFO => adc::InterruptHandler;
-});
-
-
-#[cortex_m_rt::entry]
-fn main() -> ! {
-    let p = embassy_rp::init(Default::default());
-    // Activating both I2C controllers
-    let i2c1: i2c::I2c<'_, I2C1, i2c::Async>
-        = i2c::I2c::new_async(p.I2C1, 
-                            p.PIN_3, p.PIN_2, 
-                            Irqs,
-                            i2c::Config::default());
-    let i2c0: i2c::I2c<'_, I2C0, i2c::Async>
-        = i2c::I2c::new_async(p.I2C0, 
-                            //p.PIN_1, p.PIN_0, 
-                            //p.PIN_5, p.PIN_4, 
-                            p.PIN_9, p.PIN_8,
-                            Irqs,
-                            i2c::Config::default());
-    // Activating the built-in ADC controller
-    let adc0: adc::Adc<'_> 
-            = adc::Adc::new( p.ADC, 
-                        Irqs,
-                        adc::Config::default());
-
-    spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
-        let executor1 
-            = EXECUTOR1.init(Executor::new());
-        executor1.run(|spawner|{
-            unwrap!(spawner.spawn(yadc::task(
-                adc0, 
-                p.PIN_26, 
-                p.PIN_27, 
-                p.PIN_28, 
-                p.PIN_29, 
-                1)));
-            unwrap!(spawner.spawn(yads1::task(i2c1, 1)));
-            unwrap!(spawner.spawn(yads0::task(i2c0, 1)));
-            }
-        )
-    });
-
-    let executor0 = EXECUTOR0.init(Executor::new());
-    executor0.run(|spawner| {   
-        unwrap!(spawner.spawn(yled::task(p.PIN_25.degrade())));
-        //unwrap!(spawner.spawn(ydsp::task(i2c0)));
-        unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
-        unwrap!(spawner.spawn(ybsu::task(p.USB)));
-        unwrap!(spawner.spawn(control_task()));
-    });
-}
-
 
