@@ -49,7 +49,6 @@ pub mod disp {
     // I2C
     use embassy_rp::i2c::{self};
     use embassy_rp::peripherals::I2C0;
-    //use embassy_rp::bind_interrupts;
     pub use heapless::String;
     // use itoa;
     /* use embedded_graphics::{ // <--- reactivate graphic output
@@ -75,15 +74,6 @@ pub mod disp {
 
     #[embassy_executor::task]
     pub async fn task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
-        // Init I2C display
-        /* bind_interrupts!(struct Irqs {
-            I2C0_IRQ => InterruptHandler<I2C0>;
-        });*/        
-        /* let i2c: i2c::I2c<'_, I2C0, i2c::Async> = 
-            i2c::I2c::new_async(contr, 
-                                scl, sda, 
-                                Irqs, 
-                                Config::default());*/
         let interface 
             = I2CDisplayInterface::new(i2c);
         let mut display =

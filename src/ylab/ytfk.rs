@@ -13,7 +13,7 @@ pub mod bsu {
     pub async fn task(usb: USB) {
         bind_interrupts!(struct Irqs {
             USBCTRL_IRQ => InterruptHandler<USB>;
-        });
+        }); 
 
         let driver = 
             Driver::new(usb, Irqs);
