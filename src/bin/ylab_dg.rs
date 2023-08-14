@@ -101,10 +101,6 @@ enum AppState {New, Ready, Record}
 /// + spawning tasks
 /// + assigning periphs to tasks
 
-///# Main Program
-/// 
-/// The main task starts by preparing the peripherals, 
-/// before they are moved to the individual tasks which are spanwed here.
 
 use embassy_rp::i2c;
 use embassy_rp::peripherals::{I2C0, I2C1};
