@@ -17,8 +17,8 @@ Currenty, the following devices are implemented using [Embassy]: https://embassy
 
 + LED
 + 1 long-short button
-+ on-board ADC
-+ ADS1115 ADC
++ on-board ADC channels
++ ADS1015/ADS1115 ADC
 + SSD1306 Oled display
 
 [rp2040-hal]: https://github.com/rp-rs/rp-hal/tree/main/rp2040-hal
