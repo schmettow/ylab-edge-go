@@ -85,7 +85,8 @@ pub mod adc {
                             time: Instant::now(), 
                             reading: reading};
                 
-                log::info!("{},C,{},{},{},{}", 
+                //log::info!("{},{},{},{}", 
+                log::info!("{},0,{},{},{},{}", 
                     result.time.as_micros(),
                     result.reading[0],
                     result.reading[1],
@@ -153,7 +154,7 @@ pub mod ads1015 {
                     block!(ads.read(&mut channel::SingleA3)).unwrap(),];
                 result = SensorResult{time: Instant::now(), 
                                       reading: reading};
-                log::info!("{},1,{},{},{},{}", 
+                log::info!("{},2,{},{},{},{}", 
                     result.time.as_micros(),
                     result.reading[0],
                     result.reading[1],
@@ -165,18 +166,18 @@ pub mod ads1015 {
     }
 
 
-/* ADS1115 Sensor I2C0 */
+/* ADS1115 Sensor I2C1 */
 pub mod ads1115 { 
     /* Sensor Generics */
     use embassy_time::{Duration, Ticker, Instant};
     
     // I2C    
     use embassy_rp::i2c::{self};
-    use embassy_rp::peripherals::I2C0 as I2C;
+    use embassy_rp::peripherals::I2C1 as I2C;
     use embedded_hal::adc::OneShot;
     use ads1x1x::{channel, Ads1x1x, SlaveAddr};
     // ads1115 takes 16 bit
-    use ads1x1x::DataRate16Bit as DataRate;
+    use ads1x1x::DataRate16Bit as DataRate; // <-----
     use nb::block;
 
     // ITC
@@ -204,7 +205,6 @@ pub mod ads1115 {
         let address = SlaveAddr::default();
         let mut ads 
                 = Ads1x1x::new_ads1115(i2c, address);
-        // ads.set_data_rate(DataRate16Bit::Sps860).unwrap();
         ads.set_data_rate(DataRate::Sps860).unwrap();
         let mut ticker = Ticker::every(Duration::from_hz(hz));
         let mut reading: Reading;
@@ -220,7 +220,7 @@ pub mod ads1115 {
                     block!(ads.read(&mut channel::SingleA3)).unwrap(),];
                 result = SensorResult{time: Instant::now(), 
                                       reading: reading};
-                log::info!("{},0,{},{},{},{}", 
+                log::info!("{},2,{},{},{},{}", 
                     result.time.as_micros(),
                     result.reading[0],
                     result.reading[1],
@@ -230,6 +230,95 @@ pub mod ads1115 {
                 }
             }
     }
+
+
+/* ADS1015 Sensor in Continuous*/
+pub mod ads1015_conti {
+    // use embassy_rp::gpio::{AnyPin, Input};
+    /* Sensor Generics */
+    use embassy_time::{Duration, Ticker, Instant};
+    // I2C    
+    use embassy_rp::i2c::{self};
+    use embassy_rp::peripherals::I2C0 as I2C; // <----
+    use ads1x1x::{channel, Ads1x1x, SlaveAddr};
+    // ads1115 takes 12 bit
+    use ads1x1x::DataRate12Bit as DataRate; // <----
+    // use embedded_hal_async::digital::Wait;
+
+    // ITC
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    use embassy_sync::signal::Signal;
+
+    // Data
+    pub struct SensorResult<R> {
+        pub time: Instant,
+        pub reading: R,
+    }
+
+    type Reading = [i16;4];
+    type Measure = SensorResult<Reading>;
+    pub static RESULT:Signal<CriticalSectionRawMutex, Measure> = Signal::new();
+
+    /* control channels */
+    pub use core::sync::atomic::Ordering;
+    use core::sync::atomic::AtomicBool;
+    pub static READY: AtomicBool = AtomicBool::new(false);
+    pub static RECORD: AtomicBool = AtomicBool::new(false);
+ 
+    // use embassy_rp::gpio::Pull;
+
+    #[embassy_executor::task]
+    pub async fn task(i2c: i2c::I2c<'static, I2C, i2c::Async>,
+                      // ready_pin: AnyPin,
+                      hz: u64) {
+        let address = SlaveAddr::default();
+        let ads 
+                = Ads1x1x::new_ads1015(i2c, address);   // <------
+        let mut ads 
+                = Ads1x1x::into_continuous(ads).ok().unwrap();
+        ads.set_data_rate(DataRate::Sps1600).unwrap();
+        // ads.use_alert_rdy_pin_as_ready().unwrap(); // <-------
+        
+        let mut reading: Reading;
+        let mut result: SensorResult<Reading>;
+        READY.store(true, Ordering::Relaxed);
+
+        /* let mut ready 
+                = Input::new(ready_pin, Pull::Up);*/
+        let mut ticker: Ticker = Ticker::every(Duration::from_hz(hz * 4)); // <--- times 4
+        loop {
+            if RECORD.load(Ordering::Relaxed){
+                // Including wait time saves much of the blocking time.
+                ads.select_channel(&mut channel::SingleA0).unwrap();
+                ticker.next().await;
+                let a0 = ads.read();
+                ads.select_channel(&mut channel::SingleA1).unwrap();
+                ticker.next().await;
+                //ready.wait_for_falling_edge().await;
+                let a1 = ads.read();
+                ads.select_channel(&mut channel::SingleA2).unwrap();
+                ticker.next().await;
+                //ready.wait_for_falling_edge().await;
+                let a2 = ads.read();
+                ads.select_channel(&mut channel::SingleA3).unwrap();
+                ticker.next().await;
+                //ready.wait_for_falling_edge().await;
+                let a3 = ads.read();
+                
+                reading = [a0.unwrap(), a1.unwrap(), a2.unwrap(), a3.unwrap()];
+                result = SensorResult{time: Instant::now(), 
+                                      reading: reading};
+                log::info!("{},1,{},{},{},{}", 
+                    result.time.as_micros(),
+                    result.reading[0],
+                    result.reading[1],
+                    result.reading[2],
+                    result.reading[3],);
+                    };
+                }
+            }
+    }
+
 
 
 pub mod yxz_lsm6 {
@@ -288,6 +377,9 @@ pub mod yxz_lsm6 {
         }
     }
 
+
+
+/// ## BMI Acceleration Sensor
 
     pub mod yxz_bmi160 {
         /* Sensor Generics */
