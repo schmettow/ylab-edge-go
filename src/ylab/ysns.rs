@@ -324,7 +324,7 @@ pub mod ads1015_conti {
 pub mod yxz_lsm6 {
     /* Sensor Generics */
     use embassy_time::{Duration, Ticker, Instant};
-    
+        
     // Generic result
     pub struct SensorResult<R> {
         pub time: Instant,
@@ -335,7 +335,7 @@ pub mod yxz_lsm6 {
     
     // I2C    
     use embassy_rp::i2c;
-    use embassy_rp::peripherals::I2C0;
+    use embassy_rp::peripherals::I2C1;
     use lsm6ds33 as lsm6;
 
     /* control channels */
@@ -346,7 +346,7 @@ pub mod yxz_lsm6 {
 
 
     #[embassy_executor::task]
-    pub async fn task(  i2c: i2c::I2c<'static, I2C0, i2c::Async>,
+    pub async fn task(  i2c: i2c::I2c<'static, I2C1, i2c::Async>,
                         hz: u64) {           
         let sensor_res 
             = lsm6::Lsm6ds33::new(i2c, 0x6Au8);
@@ -364,10 +364,9 @@ pub mod yxz_lsm6 {
         loop {
             ticker.next().await;
             if RECORD.load(Ordering::Relaxed){
-                reading = sensor.read_gyro().unwrap().into();   
-                result = 
-                    Measure{time: Instant::now(), reading: reading};
-                log::info!("{},L,{},{},{}", 
+                reading = sensor.read_accelerometer().unwrap().into();   
+                result = Measure{time: Instant::now(), reading: reading};
+                log::info!("{},1,{},{},{}", 
                     result.time.as_micros(),
                     result.reading[0],
                     result.reading[1],
@@ -383,6 +382,7 @@ pub mod yxz_lsm6 {
 
     pub mod yxz_bmi160 {
         /* Sensor Generics */
+        // extern crate bmi160;
         use bmi160::{AccelerometerPowerMode, Bmi160, GyroscopePowerMode, SensorSelector, SlaveAddr};
         use embassy_time::{Duration, Ticker, Instant};
         
@@ -391,12 +391,12 @@ pub mod yxz_lsm6 {
             pub time: Instant,
             pub reading: R,
         }
-        pub type Reading = [f32; 3];
+        pub type Reading = [f32; 3]; /// <--- 4 channel is total accel for now
         pub type Measure = SensorResult<Reading>;
         
         // I2C    
         use embassy_rp::i2c;
-        use embassy_rp::peripherals::I2C0;
+        use embassy_rp::peripherals::I2C1;
         
 
         /* control channels */
@@ -405,14 +405,13 @@ pub mod yxz_lsm6 {
         pub static READY: AtomicBool = AtomicBool::new(false);
         pub static RECORD: AtomicBool = AtomicBool::new(false);
     
-    
         #[embassy_executor::task]
-        pub async fn task(  i2c: i2c::I2c<'static, I2C0, i2c::Blocking>,
+        pub async fn task(  i2c: i2c::I2c<'static, I2C1, i2c::Blocking>,
                             hz: u64) {    
             let address = SlaveAddr::default();
-            let mut sensor = Bmi160::new_with_i2c(i2c, address);
-            sensor.set_accel_power_mode(AccelerometerPowerMode::Normal)
-                .unwrap();
+            let mut sensor 
+                    = Bmi160::new_with_i2c(i2c, address);
+            sensor.set_accel_power_mode(AccelerometerPowerMode::Normal).unwrap();
             sensor.set_gyro_power_mode(GyroscopePowerMode::Normal).unwrap();                       
             let mut ticker 
                     = Ticker::every(Duration::from_hz(hz));
@@ -429,11 +428,12 @@ pub mod yxz_lsm6 {
                     result = 
                         Measure{time: Instant::now(), 
                             reading: reading.into()};
-                    log::info!("{},L,{},{},{}", 
+                    log::info!("{},1,{},{},{},{}", 
                         result.time.as_micros(),
                         result.reading[0],
                         result.reading[1],
-                        result.reading[2],);
+                        result.reading[2],
+                        result.reading[0] + result.reading[1] + result.reading[2]);
                     };
                 }
             }
