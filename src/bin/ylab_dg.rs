@@ -44,8 +44,8 @@ use ylab::yuii::btn as ybtn;
 /// + four built-in ADC sensors
 use ylab::ysns::adc as yadc;
 /// + four ADCs on a ADS1115;
-use ylab::ysns::ads1015 as yads1;
-use ylab::ysns::ads1115 as yads0;
+use ylab::ysns::ads1015_conti as yads0;
+use ylab::ysns::ads1115 as yads1;
 /// + accel sensor
 // use ylab::ysns::yxz_bmi160;
 /// + IR tempereture
@@ -113,43 +113,49 @@ bind_interrupts!(struct Irqs {
 });
 
 
+static CNTR: [bool; 3] = [true, true, true];
+static HZ: [u64; 3] = [1000, 120, 10];
+
+
+
 #[cortex_m_rt::entry]
 fn init() -> ! {
     let p = embassy_rp::init(Default::default());
-    // Activating both I2C controllers
-    let i2c1: i2c::I2c<'_, I2C1, i2c::Async>
-        = i2c::I2c::new_async(p.I2C1, 
-                            p.PIN_3, p.PIN_2, 
-                            Irqs,
-                            i2c::Config::default());
-    let i2c0: i2c::I2c<'_, I2C0, i2c::Async>
-        = i2c::I2c::new_async(p.I2C0, 
-                            //p.PIN_1, p.PIN_0, 
-                            //p.PIN_5, p.PIN_4, 
-                            p.PIN_9, p.PIN_8,
-                            Irqs,
-                            i2c::Config::default());
-    // Activating the built-in ADC controller
-    let adc0: adc::Adc<'_> 
-            = adc::Adc::new( p.ADC, 
-                        Irqs,
-                        adc::Config::default());
-
+                        // Activating both I2C controllers
+    
     spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
         let executor1 
             = EXECUTOR1.init(Executor::new());
         executor1.run(|spawner|{
-            unwrap!(spawner.spawn(yadc::task(
-                adc0, 
-                p.PIN_26, 
-                p.PIN_27, 
-                p.PIN_28, 
-                p.PIN_29, 
-                1)));
-            unwrap!(spawner.spawn(yads1::task(i2c1, 1)));
-            unwrap!(spawner.spawn(yads0::task(i2c0, 1)));
+            // Activating the built-in ADC controller
+            if CNTR[0]{
+                let adc0: adc::Adc<'_> 
+                    = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
+                unwrap!(spawner.spawn(
+                    yadc::task( adc0, 
+                                p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29, 
+                                HZ[0])));
+            };
+            if CNTR[1]{
+                let i2c0: i2c::I2c<'_, I2C0, i2c::Async>
+                = i2c::I2c::new_async(p.I2C0, 
+                                    //p.PIN_1, p.PIN_0, 
+                                    //p.PIN_5, p.PIN_4, 
+                                    p.PIN_9, p.PIN_8,
+                                    Irqs,
+                                    i2c::Config::default());        
+                unwrap!(spawner.spawn(yads0::task(i2c0, HZ[1])));
             }
-        )
+            if CNTR[2]{
+                let i2c1: i2c::I2c<'_, I2C1, i2c::Async>
+                = i2c::I2c::new_async(p.I2C1, 
+                                    p.PIN_3, p.PIN_2, 
+                                    Irqs,
+                                    i2c::Config::default());
+        
+                unwrap!(spawner.spawn(yads1::task(i2c1, HZ[2])));
+            }
+        })
     });
 
     let executor0 = EXECUTOR0.init(Executor::new());
