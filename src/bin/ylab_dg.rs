@@ -32,6 +32,8 @@ static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 // use embassy_time::{Duration, Ticker};
 /// + peripherals
 use embassy_rp::gpio::Pin;
+use ylab::ysns::yxz_bmi160;
+use ylab::ysns::yxz_lsm6;
 /// + thread-safe data transfer and control
 ///
 /// Furthermore, YLab Edge brings its own high-level modules
@@ -112,9 +114,11 @@ bind_interrupts!(struct Irqs {
     ADC_IRQ_FIFO => adc::InterruptHandler;
 });
 
-
-static CNTR: [bool; 3] = [true, true, true];
-static HZ: [u64; 3] = [1000, 120, 10];
+/// CONFIGURATION
+/// 
+/// Adc Ads0 Ads1 Lsm6_1
+static DEV: [bool; 3] = [true, true, true];
+static HZ: [u64; 3] = [800, 120, 30];
 
 
 
@@ -127,8 +131,9 @@ fn init() -> ! {
         let executor1 
             = EXECUTOR1.init(Executor::new());
         executor1.run(|spawner|{
+
             // Activating the built-in ADC controller
-            if CNTR[0]{
+            if DEV[0]{
                 let adc0: adc::Adc<'_> 
                     = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
                 unwrap!(spawner.spawn(
@@ -136,9 +141,9 @@ fn init() -> ! {
                                 p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29, 
                                 HZ[0])));
             };
-            if CNTR[1]{
+            if DEV[1]{
                 let i2c0: i2c::I2c<'_, I2C0, i2c::Async>
-                = i2c::I2c::new_async(p.I2C0, 
+                    = i2c::I2c::new_async(p.I2C0, 
                                     //p.PIN_1, p.PIN_0, 
                                     //p.PIN_5, p.PIN_4, 
                                     p.PIN_9, p.PIN_8,
@@ -146,15 +151,32 @@ fn init() -> ! {
                                     i2c::Config::default());        
                 unwrap!(spawner.spawn(yads0::task(i2c0, HZ[1])));
             }
-            if CNTR[2]{
+            if DEV[2]{
                 let i2c1: i2c::I2c<'_, I2C1, i2c::Async>
                 = i2c::I2c::new_async(p.I2C1, 
                                     p.PIN_3, p.PIN_2, 
                                     Irqs,
                                     i2c::Config::default());
-        
                 unwrap!(spawner.spawn(yads1::task(i2c1, HZ[2])));
             }
+            /* if DEV[2]{
+                let i2c1: i2c::I2c<'_, I2C1, i2c::Blocking>
+                    = i2c::I2c::new_blocking(p.I2C1, 
+                                            p.PIN_7, p.PIN_6,
+                                            //Irqs,
+                                            i2c::Config::default());
+        
+                unwrap!(spawner.spawn(yxz_lsm6::task(i2c1, HZ[2])));
+            }*/
+             /* if DEV[2]{ 
+                let i2c1: i2c::I2c<'_, I2C1, i2c::Blocking>
+                    = i2c::I2c::new_blocking(p.I2C1, 
+                                            p.PIN_3, p.PIN_2,
+                                            //Irqs,
+                                            i2c::Config::default());
+        
+                unwrap!(spawner.spawn(yxz_bmi160::task(i2c1, HZ[2])));
+            }*/
         })
     });
 
@@ -203,24 +225,30 @@ async fn control_task() {
                     yadc::RECORD.store(false, Ordering::Relaxed);
                     yads0::RECORD.store(false, Ordering::Relaxed);
                     yads1::RECORD.store(false, Ordering::Relaxed);
+                    yxz_lsm6::RECORD.store(false, Ordering::Relaxed);
+                    yxz_bmi160::RECORD.store(false, Ordering::Relaxed);
                     //yirt::RECORD.store(false, Ordering::Relaxed);
                     //let disp_text: ydsp::FourLines = [ "New".into(), "".into(), "".into(),"".into()];
                     //ydsp::TEXT.signal(disp_text);
                     },
                 AppState::Ready     => {
                     yled::LED.signal(yled::State::Blink);
+                    yadc::RECORD.store(false, Ordering::Relaxed);
                     yads0::RECORD.store(false, Ordering::Relaxed);
                     yads1::RECORD.store(false, Ordering::Relaxed);
-                    yadc::RECORD.store(false, Ordering::Relaxed);
+                    yxz_lsm6::RECORD.store(false, Ordering::Relaxed);
+                    yxz_bmi160::RECORD.store(false, Ordering::Relaxed);
                     //yirt::RECORD.store(false, Ordering::Relaxed);
                     //let disp_text: ydsp::FourLines = [ "Ready".into(), "".into(), "".into(),"".into()];
                     //ydsp::TEXT.signal(disp_text);
                     },
                 AppState::Record    => {
                     yled::LED.signal(yled::State::Steady);
+                    yadc::RECORD.store(true, Ordering::Relaxed);
                     yads0::RECORD.store(true, Ordering::Relaxed);
                     yads1::RECORD.store(true, Ordering::Relaxed);
-                    yadc::RECORD.store(true, Ordering::Relaxed);
+                    yxz_lsm6::RECORD.store(true, Ordering::Relaxed);
+                    yxz_bmi160::RECORD.store(true, Ordering::Relaxed);
                     //yirt::RECORD.store(true, Ordering::Relaxed);
                     //let disp_text: ydsp::FourLines = [ "Record".into(), "".into(), "".into(),"".into()];
                     //ydsp::TEXT.signal(disp_text);
