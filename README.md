@@ -10,9 +10,6 @@ It is expected that this will trade around 20% ease-of-use for a performance imp
 
 # Current status
 
-You should include this crate if you are writing code that you want to run on
-a `Cytron Maker Pi Pico`. *Note* that the MP Pico is similar to the robotics-oriented Maker Pi RP2040, but not the same. (See [here](https://github.com/9names/makerpi_rp2040), if you have the latter).
-
 Currenty, the following devices are implemented using [Embassy]: https://embassy.dev/. All devices are running in their own async task.
 
 + LED
@@ -21,9 +18,18 @@ Currenty, the following devices are implemented using [Embassy]: https://embassy
 + ADS1015/ADS1115 ADC
 + SSD1306 Oled display
 
-[rp2040-hal]: https://github.com/rp-rs/rp-hal/tree/main/rp2040-hal
+A test system with 
 
-## Installing examples
++ the built-in 4-channel ADC @ 800Hz
++ a 4-channel ADS1015 @ 120 Hz
++ a 4-channel ADS1115 @ 30 Hz
+
+is able to produce a total sample rate of almost 4 kHz.
+
+## Installing
+
+All code in this crate is currently developed for 
+a `Cytron Maker Pi Pico`. *Note* that the MP Pico is similar to the robotics-oriented Maker Pi RP2040, but not the same. (See [here](https://github.com/9names/makerpi_rp2040), if you have the latter).
 
 To install the latest version of YLab Edge:
 
