@@ -86,7 +86,7 @@ pub mod adc {
                             reading: reading};
                 
                 //log::info!("{},{},{},{}", 
-                log::info!("{},0,{},{},{},{}", 
+                log::info!("{},0,{},{},{},{},,,,", 
                     result.time.as_micros(),
                     result.reading[0],
                     result.reading[1],
@@ -154,7 +154,7 @@ pub mod ads1015 {
                     block!(ads.read(&mut channel::SingleA3)).unwrap(),];
                 result = SensorResult{time: Instant::now(), 
                                       reading: reading};
-                log::info!("{},2,{},{},{},{}", 
+                log::info!("{},2,{},{},{},{},,,,", 
                     result.time.as_micros(),
                     result.reading[0],
                     result.reading[1],
@@ -220,7 +220,7 @@ pub mod ads1115 {
                     block!(ads.read(&mut channel::SingleA3)).unwrap(),];
                 result = SensorResult{time: Instant::now(), 
                                       reading: reading};
-                log::info!("{},2,{},{},{},{}", 
+                log::info!("{},2,{},{},{},{},,,,", 
                     result.time.as_micros(),
                     result.reading[0],
                     result.reading[1],
@@ -308,7 +308,7 @@ pub mod ads1015_conti {
                 reading = [a0.unwrap(), a1.unwrap(), a2.unwrap(), a3.unwrap()];
                 result = SensorResult{time: Instant::now(), 
                                       reading: reading};
-                log::info!("{},1,{},{},{},{}", 
+                log::info!("{},1,{},{},{},{},,,,", 
                     result.time.as_micros(),
                     result.reading[0],
                     result.reading[1],
@@ -428,7 +428,7 @@ pub mod yxz_lsm6 {
                     result = 
                         Measure{time: Instant::now(), 
                             reading: reading.into()};
-                    log::info!("{},1,{},{},{},{}", 
+                    log::info!("{},1,{},{},{},{},,,,", 
                         result.time.as_micros(),
                         result.reading[0],
                         result.reading[1],
