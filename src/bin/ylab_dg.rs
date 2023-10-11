@@ -1,6 +1,15 @@
 #![no_std]
 #![no_main]
 #![feature(type_alias_impl_trait)]
+
+/// CONFIGURATION
+/// 
+/// Adc Ads0 Ads1 Lsm6_1
+static DEV: [bool; 3] = [true, false, false];
+static HZ: [u64; 3] = [5000, 120, 30];
+//static HZ: [u64; 3] = [1, 3, 5];
+
+
 use {defmt_rtt as _, panic_probe as _};
 
 /// # YLab Edge
@@ -114,13 +123,6 @@ bind_interrupts!(struct Irqs {
     ADC_IRQ_FIFO => adc::InterruptHandler;
 });
 
-/// CONFIGURATION
-/// 
-/// Adc Ads0 Ads1 Lsm6_1
-static DEV: [bool; 3] = [true, true, true];
-static HZ: [u64; 3] = [800, 120, 30];
-
-
 
 #[cortex_m_rt::entry]
 fn init() -> ! {
@@ -141,6 +143,9 @@ fn init() -> ! {
                                 p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29, 
                                 HZ[0])));
             };
+
+            //#[cfg(feature = "ads1015-grove5")]
+            // ADS1015 with four analog ports on Grove 5
             if DEV[1]{
                 let i2c0: i2c::I2c<'_, I2C0, i2c::Async>
                     = i2c::I2c::new_async(p.I2C0, 
@@ -151,6 +156,9 @@ fn init() -> ! {
                                     i2c::Config::default());        
                 unwrap!(spawner.spawn(yads0::task(i2c0, HZ[1])));
             }
+            
+            //#[cfg(feature = "ads1115-grove2")]
+            // ADS115 with four analog ports on Grove 2
             if DEV[2]{
                 let i2c1: i2c::I2c<'_, I2C1, i2c::Async>
                 = i2c::I2c::new_async(p.I2C1, 
