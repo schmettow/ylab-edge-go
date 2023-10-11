@@ -12,16 +12,27 @@ static HZ: [u64; 3] = [5000, 120, 30];
 
 use {defmt_rtt as _, panic_probe as _};
 
-/// # YLab Edge
+/// # YLab Edge Go
 /// 
-/// __YLab Edge__ is a sensor recording firmware for the Cytron Maker Pi Pico
-/// board.
+/// __YLab Edge Go__ is a sensor recording firmware for the Cytron Maker Pi Pico
+/// board. It uses Grove connectors for a variety of sensor modules. 
+/// 
+/// The system runs on both cores of the RP2040. 
+/// It use a concurrent, cooperative multi-actor system,
+/// with one task per sensor or ui element. 
+/// The control flow is kept in a separate task, which receives and sends 
+/// messages to the other actors.
+/// 
 /// 
 /// ## Dependencies
 /// 
 /// YLab Edge makes use of the Embassy framework, in particular:
 /// 
 /// + multi-core
+/// + async routines
+/// + Timing
+/// + concurrency-safe data containers
+/// 
 /// For running multicore, we need Executor (not just spawner) 
 /// and deformat macros (!unwrap)
 use embassy_executor::Executor;
@@ -104,7 +115,7 @@ enum AppState {New, Ready, Record}
 ///
 /// Conclusion so far: If we take the Embassy promise for granted, that async is zero-cost, 
 /// the separation of functionality into different tasks reduces dependencies. It introduces 
-/// the complexity of signalling.
+/// the complexity of concurreny-safe signalling.
 ///
 /// ## Init
 /// 
@@ -123,18 +134,29 @@ bind_interrupts!(struct Irqs {
     ADC_IRQ_FIFO => adc::InterruptHandler;
 });
 
+/// Because the program runs on two cores,
+/// the `init` function is the entry point, not `main`.
 
 #[cortex_m_rt::entry]
 fn init() -> ! {
+    // Getting hold of the peripherals, 
+    // like pins, ADC, and I2C controllers.
     let p = embassy_rp::init(Default::default());
-                        // Activating both I2C controllers
     
+    // Spawning a process on the second core
     spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
+        // The second core has its own executor, which is 
+        // is the Embassy mechanism to handle concurrency.
         let executor1 
             = EXECUTOR1.init(Executor::new());
+        // Here we start spawning our actors as separate tasks. 
+        // The DEV vector simply is a static register 
+        // to easily switch on and off components at dev time.
+
         executor1.run(|spawner|{
 
             // Activating the built-in ADC controller
+            // and spawning the ADC task
             if DEV[0]{
                 let adc0: adc::Adc<'_> 
                     = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
@@ -145,7 +167,8 @@ fn init() -> ! {
             };
 
             //#[cfg(feature = "ads1015-grove5")]
-            // ADS1015 with four analog ports on Grove 5
+            // Activating the first I2C controller on Grove 5
+            // and spawning a task for the ADS1015 with four analog ports 
             if DEV[1]{
                 let i2c0: i2c::I2c<'_, I2C0, i2c::Async>
                     = i2c::I2c::new_async(p.I2C0, 
@@ -158,7 +181,8 @@ fn init() -> ! {
             }
             
             //#[cfg(feature = "ads1115-grove2")]
-            // ADS115 with four analog ports on Grove 2
+            // Activating the second I2C controller on Grove 2
+            // and spawning a task for the ADS1115 with four analog ports 
             if DEV[2]{
                 let i2c1: i2c::I2c<'_, I2C1, i2c::Async>
                 = i2c::I2c::new_async(p.I2C1, 
@@ -167,7 +191,10 @@ fn init() -> ! {
                                     i2c::Config::default());
                 unwrap!(spawner.spawn(yads1::task(i2c1, HZ[2])));
             }
-            /* if DEV[2]{
+            //#[cfg(feature = "lsm6-grove4")]
+            // Activating the second I2C controller on Grove 4
+            // and spawning a task for the LSM6 acceleration sensor
+            /* if DEV[3]{
                 let i2c1: i2c::I2c<'_, I2C1, i2c::Blocking>
                     = i2c::I2c::new_blocking(p.I2C1, 
                                             p.PIN_7, p.PIN_6,
@@ -176,7 +203,10 @@ fn init() -> ! {
         
                 unwrap!(spawner.spawn(yxz_lsm6::task(i2c1, HZ[2])));
             }*/
-             /* if DEV[2]{ 
+            //#[cfg(feature = "lsm6-grove4")]
+            // Activating the second I2C controller on Grove 2
+            // and spawning a task for the LSM6 acceleration sensor
+             /* if DEV[4]{ 
                 let i2c1: i2c::I2c<'_, I2C1, i2c::Blocking>
                     = i2c::I2c::new_blocking(p.I2C1, 
                                             p.PIN_3, p.PIN_2,
@@ -188,56 +218,87 @@ fn init() -> ! {
         })
     });
 
+
+    // Initializing the Embassy executor on the first core.
+    // Starting all tasks that are respnsible for:
+    // + ui events
+    // + control flow
+    // + sending data
     let executor0 = EXECUTOR0.init(Executor::new());
     executor0.run(|spawner| {   
+        // task for controlling the led
         unwrap!(spawner.spawn(yled::task(p.PIN_25.degrade())));
+        // task for receiving text and put it on an OLED 1306
         //unwrap!(spawner.spawn(ydsp::task(i2c0)));
+        // task for listening to button presses.
         unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
+        // task listening for data packeges to send up the line (reverse USB ;)
         unwrap!(spawner.spawn(ybsu::task(p.USB)));
+        // task to control sensors, storage and ui
         unwrap!(spawner.spawn(control_task()));
     });
 }
 
 /// ## Control task
 /// 
-/// + capturing button presses
-/// + sending commands to the other tasks
-/// + giving signals via LED
+/// + capturing user input
+/// + controlling user output
+/// + controlling storage
 /// + put text on a display
 /// 
 /// 
+/// 
 
+/// To be concurrency-safe, we are using boolean atomics.
+/// Atomics are capsules around basic data types that 
+/// efficiently handle concurrent or parallel access.
 pub use core::sync::atomic::Ordering;
 
 #[embassy_executor::task]
 async fn control_task() { 
-    let mut state = AppState::New;
-    yled::LED.signal(yled::State::Off);
+    let mut state = AppState::Record;
+    yled::LED.signal(yled::State::Steady);
     let disp_text: ydsp::FourLines = [ "YLab".into(), "".into(), "".into(),"".into()];
+    // It may seem weird that this works even when the ydsp task is not 
+    // started. It does works, because channel TEXT is static. That
+    // means it is invoked on loading the ydsp module.
+    // Of course, attaching a display is great fun ;)
     ydsp::TEXT.signal(disp_text);
-    loop {
-        let btn_1 = ybtn::BTN.wait().await;
-        let next_state = 
-        match (state, btn_1) {
-            (AppState::New,     ybtn::Event::Short) => AppState::Ready,
-            (AppState::Ready,   ybtn::Event::Short) => AppState::Record, 
-            (AppState::Record,  ybtn::Event::Short) => AppState::Ready,
-            (_,                 ybtn::Event::Long)  => AppState::New,
-            (_, _) => state,};
-        
 
+    // The main loop of the controlk task. 
+    // Sometimes I miss the poetry of `while true`
+    loop {
+        // Listening to the button channel.
+        let btn_1 = ybtn::BTN.wait().await;
+        // When a new event appears in the channel,
+        // a state transition occurs. This is initiated by 
+        // announcing a new state.
+        let next_state = 
+            match (state, btn_1) {
+                (AppState::New,     ybtn::Event::Short) => AppState::Ready,
+                (AppState::Ready,   ybtn::Event::Short) => AppState::Record, 
+                (AppState::Record,  ybtn::Event::Short) => AppState::Ready,
+                (_,                 ybtn::Event::Long)  => AppState::New,
+                (_, _) => state,};
+            
+        // When a new event has been announced we do the transition.
+        // This happens by sending the right messages to all our tasks.
         if next_state != state {
             match next_state {
                 AppState::New       => {
+                    // LED knows several states, therefore a signal is used
                     yled::LED.signal(yled::State::Vibrate);
+                    // From here on we are just pulling On/Off switches.
+                    // Again, not all tasks are active. We can still send 
+                    // messages to dangling modules.
                     yadc::RECORD.store(false, Ordering::Relaxed);
                     yads0::RECORD.store(false, Ordering::Relaxed);
                     yads1::RECORD.store(false, Ordering::Relaxed);
                     yxz_lsm6::RECORD.store(false, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(false, Ordering::Relaxed);
                     //yirt::RECORD.store(false, Ordering::Relaxed);
-                    //let disp_text: ydsp::FourLines = [ "New".into(), "".into(), "".into(),"".into()];
-                    //ydsp::TEXT.signal(disp_text);
+                    let disp_text: ydsp::FourLines = [ "New".into(), "".into(), "".into(),"".into()];
+                    ydsp::TEXT.signal(disp_text);
                     },
                 AppState::Ready     => {
                     yled::LED.signal(yled::State::Blink);
