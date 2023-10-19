@@ -258,6 +258,7 @@ pub use core::sync::atomic::Ordering;
 async fn control_task() { 
     let mut state = AppState::Record;
     yled::LED.signal(yled::State::Steady);
+    yadc::RECORD.store(true, Ordering::Relaxed);
     let disp_text: ydsp::FourLines = [ "YLab".into(), "".into(), "".into(),"".into()];
     // It may seem weird that this works even when the ydsp task is not 
     // started. It does works, because channel TEXT is static. That
