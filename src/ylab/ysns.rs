@@ -256,7 +256,7 @@ pub mod yxz_lsm6 {
 
 
     #[embassy_executor::task]
-    pub async fn task(  i2c: i2c::I2c<'static, I2C1, i2c::Async>,
+    pub async fn task(  i2c: i2c::I2c<'static, I2C1, i2c::Blocking>,
                         hz: u64) {           
         let sensor_res 
             = lsm6::Lsm6ds33::new(i2c, 0x6Au8);
@@ -276,7 +276,7 @@ pub mod yxz_lsm6 {
             if RECORD.load(Ordering::Relaxed){
                 reading = sensor.read_accelerometer().unwrap().into();   
                 result = Measure{time: Instant::now(), reading: reading};
-                log::info!("{},1,{},{},{}", 
+                log::info!("{},1,{},{},{},,,,", 
                     result.time.as_micros(),
                     result.reading[0],
                     result.reading[1],
@@ -301,7 +301,7 @@ pub mod yxz_lsm6 {
             pub time: Instant,
             pub reading: R,
         }
-        pub type Reading = [f32; 3]; /// <--- 4 channel is total accel for now
+        pub type Reading = [f32; 6]; /// <--- 4 channel is total accel for now
         pub type Measure = SensorResult<Reading>;
         
         // I2C    
@@ -332,18 +332,22 @@ pub mod yxz_lsm6 {
                 ticker.next().await;
                 if RECORD.load(Ordering::Relaxed){
                     let data = sensor.data(SensorSelector::new().accel().gyro()).unwrap();
-                    let accel = data.accel.unwrap();
-                    reading = [accel.x.into(), accel.y.into(), accel.z.into()];
-                    //let gyro = data.gyro.unwrap();
+                    let acc = data.accel.unwrap();
+                    let gyr = data.gyro.unwrap();
+                    reading = [acc.x.into(), acc.y.into(), acc.z.into(),
+                    gyr.x.into(), gyr.y.into(), gyr.z.into()];
+                    
                     result = 
                         Measure{time: Instant::now(), 
                             reading: reading.into()};
-                    log::info!("{},1,{},{},{},{},,,,", 
+                    log::info!("{},1,{},{},{},{},{},{},,", 
                         result.time.as_micros(),
                         result.reading[0],
                         result.reading[1],
                         result.reading[2],
-                        result.reading[0] + result.reading[1] + result.reading[2]);
+                        result.reading[3],
+                        result.reading[4],
+                        result.reading[5]);
                     };
                 }
             }
