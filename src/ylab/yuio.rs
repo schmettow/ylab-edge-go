@@ -1,5 +1,6 @@
 
 pub mod led {
+
     // LED control
     use embassy_time::{Duration, Timer};
     use embassy_rp::gpio::{AnyPin, Output, Level};
@@ -46,10 +47,12 @@ pub mod led {
 }
 
 pub mod disp {
-    // I2C
-    use crate::hal::i2c::{self};
-    use crate::hal::peripherals::I2C1;
-    pub use heapless::String;
+    use crate::*;
+    use super::*;
+    use hal::i2c;
+    use hal::peripherals::I2C0; 
+
+    //pub use heapless::String;
     // use itoa;
     /* use embedded_graphics::{ // <--- reactivate graphic output
         pixelcolor::BinaryColor,
@@ -60,20 +63,18 @@ pub mod disp {
     };*/
     use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
     // inter-thread communication
-    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-    use embassy_sync::signal::Signal;
-
+    
     pub type OneLine = String<20>;
     pub type FourLines = [Option<OneLine>; 4];
     
-    pub static TEXT: Signal<CriticalSectionRawMutex, FourLines> 
+    pub static TEXT: Signal<Mutex, FourLines> 
                 = Signal::new();
 
     // Text display
     use core::fmt::Write;
 
     #[embassy_executor::task]
-    pub async fn task(i2c: i2c::I2c<'static, I2C1, i2c::Async>) {
+    pub async fn task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
         let interface 
             = I2CDisplayInterface::new(i2c);
         let mut display =

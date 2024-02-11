@@ -5,7 +5,7 @@
 /// 
 /// Adc Ads0 Ads1 Lsm6_1
 static DEV: [bool; 3] = [true, false, false];
-static HZ: [u64; 3] = [500, 120, 30];
+static HZ: [u64; 3] = [5, 10, 30];
 //static HZ: [u64; 3] = [1, 3, 5];
 
 
@@ -35,8 +35,8 @@ use {defmt_rtt as _, panic_probe as _};
 /// For running multicore, we need Executor (not just spawner) 
 /// and deformat macros (!unwrap)
 use embassy_executor::Executor;
-use embassy_rp::adc::Async;
-use embassy_rp::multicore::{spawn_core1, Stack};
+use hal::adc::{Async, Blocking};
+use hal::multicore::{spawn_core1, Stack};
 use defmt::*;
 
 /// The following code initializes the second stack, plus 
@@ -51,7 +51,7 @@ static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 /// + timing using Embassy time 
 // use embassy_time::{Duration, Ticker};
 /// + peripherals
-use embassy_rp::gpio::Pin;
+use hal::gpio::Pin;
 use ylab::ysns::yxz_bmi160;
 use ylab::ysns::yxz_lsm6;
 /// + thread-safe data transfer and control
@@ -123,16 +123,17 @@ enum AppState {New, Ready, Record}
 /// + spawning tasks
 /// + assigning periphs to tasks
 
-
-use embassy_rp::i2c;
-use embassy_rp::peripherals::{I2C0, I2C1};
-use embassy_rp::adc;
-use embassy_rp::bind_interrupts;
+use ylab::hal;
+use hal::i2c::{self, Config};
+use hal::peripherals::{I2C0, I2C1};
+use hal::adc;
+use hal::bind_interrupts;
 bind_interrupts!(struct Irqs {
     I2C0_IRQ => i2c::InterruptHandler<I2C0>;
     I2C1_IRQ => i2c::InterruptHandler<I2C1>;
     ADC_IRQ_FIFO => adc::InterruptHandler;
 });
+
 
 /// Because the program runs on two cores,
 /// the `init` function is the entry point, not `main`.
@@ -141,8 +142,12 @@ bind_interrupts!(struct Irqs {
 fn init() -> ! {
     // Getting hold of the peripherals, 
     // like pins, ADC, and I2C controllers.
-    let p = embassy_rp::init(Default::default());
+    let p = hal::init(Default::default());
     
+    // Display will use this
+    let i2c0 
+        = i2c::I2c::new_async(p.I2C0, p.PIN_9, p.PIN_8, Irqs, Config::default());
+
     // Spawning a process on the second core
     spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
         // The second core has its own executor, which is 
@@ -194,15 +199,13 @@ fn init() -> ! {
             //#[cfg(feature = "lsm6-grove4")]
             // Activating the second I2C controller on Grove 4
             // and spawning a task for the LSM6 acceleration sensor
-            /* if DEV[3]{
-                let i2c1: i2c::I2c<'_, I2C1, i2c::Blocking>
-                    = i2c::I2c::new_blocking(p.I2C1, 
-                                            p.PIN_7, p.PIN_6,
-                                            //Irqs,
-                                            i2c::Config::default());
-        
-                unwrap!(spawner.spawn(yxz_lsm6::task(i2c1, HZ[2])));
-            }*/
+            if DEV[1]{
+                let i2c1 
+                    = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6,
+                                    //Irqs,
+                                    i2c::Config::default());
+                unwrap!(spawner.spawn(yxz_bmi160::task(i2c1, HZ[1])));
+            }
             //#[cfg(feature = "lsm6-grove4")]
             // Activating the second I2C controller on Grove 2
             // and spawning a task for the LSM6 acceleration sensor
@@ -229,7 +232,7 @@ fn init() -> ! {
         // task for controlling the led
         unwrap!(spawner.spawn(yled::task(p.PIN_25.degrade())));
         // task for receiving text and put it on an OLED 1306
-        //unwrap!(spawner.spawn(ydsp::task(i2c0)));
+        unwrap!(spawner.spawn(ydsp::task(i2c0)));
         // task for listening to button presses.
         unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
         // task listening for data packeges to send up the line (reverse USB ;)
@@ -259,6 +262,8 @@ async fn control_task() {
     let mut state = AppState::Record;
     yled::LED.signal(yled::State::Steady);
     yadc::RECORD.store(true, Ordering::Relaxed);
+    yxz_lsm6::RECORD.store(true, Ordering::Relaxed);
+    yxz_bmi160::RECORD.store(true, Ordering::Relaxed);
     let disp_text: ydsp::FourLines = 
     [ Some("YLab".try_into().unwrap()) ,None, None, None];
     // It may seem weird that this works even when the ydsp task is not 
@@ -311,8 +316,9 @@ async fn control_task() {
                     yxz_lsm6::RECORD.store(false, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(false, Ordering::Relaxed);
                     //yirt::RECORD.store(false, Ordering::Relaxed);
-                    //let disp_text: ydsp::FourLines = [ "Ready".into(), "".into(), "".into(),"".into()];
-                    //ydsp::TEXT.signal(disp_text);
+                    let disp_text: ydsp::FourLines = [ Some("Ready".try_into().unwrap()),
+                     None, None,None];
+                    ydsp::TEXT.signal(disp_text);
                     },
                 AppState::Record    => {
                     yled::LED.signal(yled::State::Steady);
@@ -322,8 +328,8 @@ async fn control_task() {
                     yxz_lsm6::RECORD.store(true, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(true, Ordering::Relaxed);
                     //yirt::RECORD.store(true, Ordering::Relaxed);
-                    //let disp_text: ydsp::FourLines = [ "Record".into(), "".into(), "".into(),"".into()];
-                    //ydsp::TEXT.signal(disp_text);
+                    let disp_text: ydsp::FourLines = [ Some("Record".try_into().unwrap()), None, None,None];
+                    ydsp::TEXT.signal(disp_text);
                     }
             }
         state = next_state;
