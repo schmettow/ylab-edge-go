@@ -1,9 +1,13 @@
+
+
 /* YLab transport formats  */
 pub mod bsu {
+    use crate::*;
+    use super::*;
     /* USB Logging */
-    use embassy_rp::bind_interrupts;
-    use embassy_rp::peripherals::USB;
-    use embassy_rp::usb::{Driver, InterruptHandler};
+    use hal::bind_interrupts;
+    use hal::peripherals::USB;
+    use hal::usb::{Driver, InterruptHandler};
     use log::LevelFilter;
     use embassy_usb_logger;
 
