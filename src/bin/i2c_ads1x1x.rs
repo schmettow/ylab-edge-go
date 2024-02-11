@@ -111,7 +111,7 @@ async fn main(spawner: Spawner) {
         let result = ads1115::RESULT.wait().await;
         //let _when = result.time;
         //let _what = result.reading;
-        log::info!("{},{},{},{},{}", 
+        log::info!("{},{},{},{},{},,,,", 
                 result.time.as_millis(), 
                 result.reading[0],
                 result.reading[1],
