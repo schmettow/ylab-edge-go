@@ -1,8 +1,16 @@
 pub use crate::*;
 pub use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as Mutex;
 pub use embassy_sync::signal::Signal;
+use core::fmt::Display;
 pub use core::sync::atomic::Ordering;
 pub use core::sync::atomic::AtomicBool;
+
+pub struct SensorResult<R> {
+    pub time: Instant,
+    pub reading: R,
+}
+pub type Reading = [f32; 3];
+pub type Measure = SensorResult<Reading>;
 
 pub mod fake {
     use super::*;
@@ -36,6 +44,7 @@ pub mod fake {
         }
 
 
+   
 
 pub mod adc {
     use super::*;
@@ -232,25 +241,20 @@ pub mod ads1115 {
 */
 
 pub mod yxz_lsm6 {
-    /* Sensor Generics */
-    use embassy_time::{Duration, Ticker, Instant};
+    use super::*;
+    //use super::*;
         
     // Generic result
-    pub struct SensorResult<R> {
-        pub time: Instant,
-        pub reading: R,
-    }
-    pub type Reading = [f32; 3];
-    pub type Measure = SensorResult<Reading>;
+    
     
     // I2C    
-    use embassy_rp::i2c;
-    use embassy_rp::peripherals::I2C1;
+    use hal::i2c;
+    use hal::peripherals::I2C1;
     use lsm6ds33 as lsm6;
 
     /* control channels */
-    pub use core::sync::atomic::Ordering;
-    use core::sync::atomic::AtomicBool;
+    //pub use core::sync::atomic::Ordering;
+    //use core::sync::atomic::AtomicBool;
     pub static READY: AtomicBool = AtomicBool::new(false);
     pub static RECORD: AtomicBool = AtomicBool::new(false);
 
