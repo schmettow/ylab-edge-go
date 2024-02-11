@@ -4,7 +4,7 @@
 /// CONFIGURATION
 /// 
 /// Adc Ads0 Ads1 Lsm6_1
-static DEV: [bool; 3] = [true, false, false];
+static DEV: [bool; 3] = [true, true, false];
 static HZ: [u64; 3] = [5, 10, 30];
 //static HZ: [u64; 3] = [1, 3, 5];
 
@@ -171,53 +171,21 @@ fn init() -> ! {
                                 HZ[0])));
             };
 
-            //#[cfg(feature = "ads1015-grove5")]
-            // Activating the first I2C controller on Grove 5
-            // and spawning a task for the ADS1015 with four analog ports 
-            /* if DEV[1]{
-                let i2c0: i2c::I2c<'_, I2C0, i2c::Async>
-                    = i2c::I2c::new_async(p.I2C0, 
-                                    //p.PIN_1, p.PIN_0, 
-                                    //p.PIN_5, p.PIN_4, 
-                                    p.PIN_9, p.PIN_8,
-                                    Irqs,
-                                    i2c::Config::default());        
-                unwrap!(spawner.spawn(yads0::task(i2c0, HZ[1])));
-            }*/
-            
-            //#[cfg(feature = "ads1115-grove2")]
-            // Activating the second I2C controller on Grove 2
-            // and spawning a task for the ADS1115 with four analog ports 
-            /*if DEV[2]{
-                let i2c1: i2c::I2c<'_, I2C1, i2c::Async>
-                = i2c::I2c::new_async(p.I2C1, 
-                                    p.PIN_3, p.PIN_2, 
-                                    Irqs,
-                                    i2c::Config::default());
-                unwrap!(spawner.spawn(yads1::task(i2c1, HZ[2])));
-            }*/
+
             //#[cfg(feature = "lsm6-grove4")]
             // Activating the second I2C controller on Grove 4
-            // and spawning a task for the LSM6 acceleration sensor
+            // and spawning a task for the Yxz acceleration sensor
             if DEV[1]{
                 let i2c1 
                     = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6,
                                     //Irqs,
                                     i2c::Config::default());
+                let disp_text: ydsp::FourLines = [None, Some("Starting Yxz"
+                                                                .try_into().unwrap()), None,None];
+                ydsp::TEXT.signal(disp_text);
                 unwrap!(spawner.spawn(yxz_bmi160::task(i2c1, HZ[1])));
             }
-            //#[cfg(feature = "lsm6-grove4")]
-            // Activating the second I2C controller on Grove 2
-            // and spawning a task for the LSM6 acceleration sensor
-             /* if DEV[4]{ 
-                let i2c1: i2c::I2c<'_, I2C1, i2c::Blocking>
-                    = i2c::I2c::new_blocking(p.I2C1, 
-                                            p.PIN_3, p.PIN_2,
-                                            //Irqs,
-                                            i2c::Config::default());
-        
-                unwrap!(spawner.spawn(yxz_bmi160::task(i2c1, HZ[2])));
-            }*/
+
         })
     });
 
@@ -264,12 +232,7 @@ async fn control_task() {
     yadc::RECORD.store(true, Ordering::Relaxed);
     yxz_lsm6::RECORD.store(true, Ordering::Relaxed);
     yxz_bmi160::RECORD.store(true, Ordering::Relaxed);
-    let disp_text: ydsp::FourLines = 
-    [ Some("YLab".try_into().unwrap()) ,None, None, None];
-    // It may seem weird that this works even when the ydsp task is not 
-    // started. It does works, because channel TEXT is static. That
-    // means it is invoked on loading the ydsp module.
-    // Of course, attaching a display is great fun ;)
+    let disp_text: ydsp::FourLines = [ Some("YLab under control".try_into().unwrap()) ,None, None, None];
     ydsp::TEXT.signal(disp_text);
 
     // The main loop of the controlk task. 
