@@ -1,12 +1,11 @@
 #![no_std]
 #![no_main]
-#![feature(type_alias_impl_trait)]
 
 /// CONFIGURATION
 /// 
 /// Adc Ads0 Ads1 Lsm6_1
 static DEV: [bool; 3] = [true, false, false];
-static HZ: [u64; 3] = [5000, 120, 30];
+static HZ: [u64; 3] = [500, 120, 30];
 //static HZ: [u64; 3] = [1, 3, 5];
 
 
@@ -36,6 +35,7 @@ use {defmt_rtt as _, panic_probe as _};
 /// For running multicore, we need Executor (not just spawner) 
 /// and deformat macros (!unwrap)
 use embassy_executor::Executor;
+use embassy_rp::adc::Async;
 use embassy_rp::multicore::{spawn_core1, Stack};
 use defmt::*;
 
@@ -66,8 +66,8 @@ use ylab::yuii::btn as ybtn;
 /// + four built-in ADC sensors
 use ylab::ysns::adc as yadc;
 /// + four ADCs on a ADS1115;
-use ylab::ysns::ads1015_conti as yads0;
-use ylab::ysns::ads1115 as yads1;
+// use ylab::ysns::ads1015_conti as yads0;
+// use ylab::ysns::ads1115 as yads1;
 /// + accel sensor
 // use ylab::ysns::yxz_bmi160;
 /// + IR tempereture
@@ -158,7 +158,7 @@ fn init() -> ! {
             // Activating the built-in ADC controller
             // and spawning the ADC task
             if DEV[0]{
-                let adc0: adc::Adc<'_> 
+                let adc0: adc::Adc<'_, Async> 
                     = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
                 unwrap!(spawner.spawn(
                     yadc::task( adc0, 
@@ -169,7 +169,7 @@ fn init() -> ! {
             //#[cfg(feature = "ads1015-grove5")]
             // Activating the first I2C controller on Grove 5
             // and spawning a task for the ADS1015 with four analog ports 
-            if DEV[1]{
+            /* if DEV[1]{
                 let i2c0: i2c::I2c<'_, I2C0, i2c::Async>
                     = i2c::I2c::new_async(p.I2C0, 
                                     //p.PIN_1, p.PIN_0, 
@@ -178,19 +178,19 @@ fn init() -> ! {
                                     Irqs,
                                     i2c::Config::default());        
                 unwrap!(spawner.spawn(yads0::task(i2c0, HZ[1])));
-            }
+            }*/
             
             //#[cfg(feature = "ads1115-grove2")]
             // Activating the second I2C controller on Grove 2
             // and spawning a task for the ADS1115 with four analog ports 
-            if DEV[2]{
+            /*if DEV[2]{
                 let i2c1: i2c::I2c<'_, I2C1, i2c::Async>
                 = i2c::I2c::new_async(p.I2C1, 
                                     p.PIN_3, p.PIN_2, 
                                     Irqs,
                                     i2c::Config::default());
                 unwrap!(spawner.spawn(yads1::task(i2c1, HZ[2])));
-            }
+            }*/
             //#[cfg(feature = "lsm6-grove4")]
             // Activating the second I2C controller on Grove 4
             // and spawning a task for the LSM6 acceleration sensor
@@ -259,7 +259,8 @@ async fn control_task() {
     let mut state = AppState::Record;
     yled::LED.signal(yled::State::Steady);
     yadc::RECORD.store(true, Ordering::Relaxed);
-    let disp_text: ydsp::FourLines = [ "YLab".into(), "".into(), "".into(),"".into()];
+    let disp_text: ydsp::FourLines = 
+    [ Some("YLab".try_into().unwrap()) ,None, None, None];
     // It may seem weird that this works even when the ydsp task is not 
     // started. It does works, because channel TEXT is static. That
     // means it is invoked on loading the ydsp module.
@@ -293,19 +294,20 @@ async fn control_task() {
                     // Again, not all tasks are active. We can still send 
                     // messages to dangling modules.
                     yadc::RECORD.store(false, Ordering::Relaxed);
-                    yads0::RECORD.store(false, Ordering::Relaxed);
-                    yads1::RECORD.store(false, Ordering::Relaxed);
+                    //yads0::RECORD.store(false, Ordering::Relaxed);
+                    //yads1::RECORD.store(false, Ordering::Relaxed);
                     yxz_lsm6::RECORD.store(false, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(false, Ordering::Relaxed);
                     //yirt::RECORD.store(false, Ordering::Relaxed);
-                    let disp_text: ydsp::FourLines = [ "New".into(), "".into(), "".into(),"".into()];
+                    let disp_text: ydsp::FourLines 
+                        = [ Some("New".try_into().unwrap()), None, None, None];
                     ydsp::TEXT.signal(disp_text);
                     },
                 AppState::Ready     => {
                     yled::LED.signal(yled::State::Blink);
                     yadc::RECORD.store(false, Ordering::Relaxed);
-                    yads0::RECORD.store(false, Ordering::Relaxed);
-                    yads1::RECORD.store(false, Ordering::Relaxed);
+                    //yads0::RECORD.store(false, Ordering::Relaxed);
+                    //yads1::RECORD.store(false, Ordering::Relaxed);
                     yxz_lsm6::RECORD.store(false, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(false, Ordering::Relaxed);
                     //yirt::RECORD.store(false, Ordering::Relaxed);
@@ -315,8 +317,8 @@ async fn control_task() {
                 AppState::Record    => {
                     yled::LED.signal(yled::State::Steady);
                     yadc::RECORD.store(true, Ordering::Relaxed);
-                    yads0::RECORD.store(true, Ordering::Relaxed);
-                    yads1::RECORD.store(true, Ordering::Relaxed);
+                    //yads0::RECORD.store(true, Ordering::Relaxed);
+                    //yads1::RECORD.store(true, Ordering::Relaxed);
                     yxz_lsm6::RECORD.store(true, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(true, Ordering::Relaxed);
                     //yirt::RECORD.store(true, Ordering::Relaxed);
