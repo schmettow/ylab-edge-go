@@ -6,7 +6,8 @@ pub use embassy_rp as hal;
 pub use heapless::String;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as Mutex;
 use embassy_sync::signal::Signal;
-use core::fmt::Write;
+use core::fmt;
+use fmt::Write;
 
 
 pub mod ysns; // Ylab sensors
