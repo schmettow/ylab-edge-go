@@ -8,7 +8,7 @@ static DEV: [bool; 3] = [true, true, false];
 static HZ: [u64; 3] = [5, 10, 30];
 //static HZ: [u64; 3] = [1, 3, 5];
 
-
+use ylab::{ysns::yco2, yuio::disp::TEXT as DISP};
 use {defmt_rtt as _, panic_probe as _};
 
 /// # YLab Edge Go
@@ -35,6 +35,7 @@ use {defmt_rtt as _, panic_probe as _};
 /// For running multicore, we need Executor (not just spawner) 
 /// and deformat macros (!unwrap)
 use embassy_executor::Executor;
+#[allow(unused_imports)]
 use hal::adc::{Async, Blocking};
 use hal::multicore::{spawn_core1, Stack};
 use defmt::*;
@@ -162,14 +163,7 @@ fn init() -> ! {
 
             // Activating the built-in ADC controller
             // and spawning the ADC task
-            if DEV[0]{
-                let adc0: adc::Adc<'_, Async> 
-                    = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
-                unwrap!(spawner.spawn(
-                    yadc::task( adc0, 
-                                p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29, 
-                                HZ[0])));
-            };
+            
 
 
             //#[cfg(feature = "lsm6-grove4")]
@@ -177,13 +171,13 @@ fn init() -> ! {
             // and spawning a task for the Yxz acceleration sensor
             if DEV[1]{
                 let i2c1 
-                    = i2c::I2c::new_blocking(p.I2C1, p.PIN_7, p.PIN_6,
-                                    //Irqs,
+                    = i2c::I2c::new_async(p.I2C1, p.PIN_7, p.PIN_6,
+                                    Irqs,
                                     i2c::Config::default());
-                let disp_text: ydsp::FourLines = [None, Some("Starting Yxz"
+                let disp_text: ydsp::FourLines = [None, Some("I2C Grove 4"
                                                                 .try_into().unwrap()), None,None];
-                ydsp::TEXT.signal(disp_text);
-                unwrap!(spawner.spawn(yxz_bmi160::task(i2c1, HZ[1])));
+                DISP.signal(disp_text);
+                unwrap!(spawner.spawn(ylab::ysns::yco2::task(i2c1)));
             }
 
         })
@@ -207,6 +201,14 @@ fn init() -> ! {
         unwrap!(spawner.spawn(ybsu::task(p.USB)));
         // task to control sensors, storage and ui
         unwrap!(spawner.spawn(control_task()));
+        if DEV[0]{
+            let adc0: adc::Adc<'_, Async> 
+                = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
+            unwrap!(spawner.spawn(
+                yadc::task( adc0, 
+                            p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29, 
+                            HZ[0])));
+        };
     });
 }
 
@@ -228,16 +230,21 @@ pub use core::sync::atomic::Ordering;
 #[embassy_executor::task]
 async fn control_task() { 
     let mut state = AppState::Record;
-    yled::LED.signal(yled::State::Steady);
     yadc::RECORD.store(true, Ordering::Relaxed);
     yxz_lsm6::RECORD.store(true, Ordering::Relaxed);
     yxz_bmi160::RECORD.store(true, Ordering::Relaxed);
-    let disp_text: ydsp::FourLines = [ Some("YLab under control".try_into().unwrap()) ,None, None, None];
-    ydsp::TEXT.signal(disp_text);
+    yco2::RECORD.store(true, Ordering::Relaxed);
+    DISP.signal([ Some("YLab CTRL... OK".try_into().unwrap()) ,None, None, None]);
 
-    // The main loop of the controlk task. 
+    // The main loop of the control task. 
     // Sometimes I miss the poetry of `while true`
     loop {
+        yadc::RECORD.store(true, Ordering::Relaxed);
+                    //yads0::RECORD.store(true, Ordering::Relaxed);
+                    //yads1::RECORD.store(true, Ordering::Relaxed);
+                    yxz_lsm6::RECORD.store(true, Ordering::Relaxed);
+                    yxz_bmi160::RECORD.store(true, Ordering::Relaxed);
+                    yco2::RECORD.store(true, Ordering::Relaxed);
         // Listening to the button channel.
         let btn_1 = ybtn::BTN.wait().await;
         // When a new event appears in the channel,
@@ -255,7 +262,7 @@ async fn control_task() {
         // This happens by sending the right messages to all our tasks.
         if next_state != state {
             match next_state {
-                AppState::New       => {
+                AppState::New => {
                     // LED knows several states, therefore a signal is used
                     yled::LED.signal(yled::State::Vibrate);
                     // From here on we are just pulling On/Off switches.
@@ -267,9 +274,7 @@ async fn control_task() {
                     yxz_lsm6::RECORD.store(false, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(false, Ordering::Relaxed);
                     //yirt::RECORD.store(false, Ordering::Relaxed);
-                    let disp_text: ydsp::FourLines 
-                        = [ Some("New".try_into().unwrap()), None, None, None];
-                    ydsp::TEXT.signal(disp_text);
+                    DISP.signal([ Some("New".try_into().unwrap()), None, None, None]);
                     },
                 AppState::Ready     => {
                     yled::LED.signal(yled::State::Blink);
@@ -279,9 +284,8 @@ async fn control_task() {
                     yxz_lsm6::RECORD.store(false, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(false, Ordering::Relaxed);
                     //yirt::RECORD.store(false, Ordering::Relaxed);
-                    let disp_text: ydsp::FourLines = [ Some("Ready".try_into().unwrap()),
-                     None, None,None];
-                    ydsp::TEXT.signal(disp_text);
+                    DISP.signal([ Some("Ready".try_into().unwrap()),None, None,None]);
+                    
                     },
                 AppState::Record    => {
                     yled::LED.signal(yled::State::Steady);
@@ -290,9 +294,9 @@ async fn control_task() {
                     //yads1::RECORD.store(true, Ordering::Relaxed);
                     yxz_lsm6::RECORD.store(true, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(true, Ordering::Relaxed);
+                    yco2::RECORD.store(true, Ordering::Relaxed);
                     //yirt::RECORD.store(true, Ordering::Relaxed);
-                    let disp_text: ydsp::FourLines = [ Some("Record".try_into().unwrap()), None, None,None];
-                    ydsp::TEXT.signal(disp_text);
+                    DISP.signal([ Some("Record".try_into().unwrap()),None, None,None]);
                     }
             }
         state = next_state;
