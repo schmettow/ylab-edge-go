@@ -233,8 +233,9 @@ pub mod ads1115 {
 
 pub mod yxz_lsm6 {
     use super::*;
-    use hal::peripherals::I2C1;
-    use lsm6ds33 as lsm6;
+    use hal::peripherals::I2C1 as I2C;
+    use i2c::Blocking as Mode;
+    use lsm6ds33::Lsm6ds33 as Lsm6;
 
     /* control channels */
     pub static READY: AtomicBool = AtomicBool::new(false);
@@ -249,16 +250,13 @@ pub mod yxz_lsm6 {
     pub type Measure = SensorResult<Reading>;
 
     #[embassy_executor::task]
-    pub async fn task(  i2c: i2c::I2c<'static, I2C1, i2c::Blocking>,
+    pub async fn task(  i2c: i2c::I2c<'static, I2C, Mode>,
                         hz: u64) { 
-        DISP.signal([None, None, None, 
-                     Some("Lsm6 task".try_into().unwrap())]);         
-        let sensor_res 
-            = lsm6::Lsm6ds33::new(i2c, 0x6Au8);
-        // Debug is not implemented, that's why unwrap won't work
+        DISP.signal([None, None, None, Some("Lsm6 task".try_into().unwrap())]);         
+        let sensor_res = Lsm6::new(i2c, 0x6Au8);
         let mut sensor 
                 = match sensor_res {
-                    Result::Ok(thing) => thing,
+                    Result::Ok(sensor) => sensor,
                     Result::Err(_) => 
                         {DISP.signal([None, None, None, 
                                 Some("Lsm6 =/= I2C".try_into().unwrap())]);
@@ -291,6 +289,7 @@ pub mod yxz_lsm6 {
 
 pub mod yxz_bmi160 {
         use super::*;
+        #[allow(unused)]
         use bmi160::{AccelerometerPowerMode, Bmi160, GyroscopePowerMode, SensorSelector, SlaveAddr};
         use hal::peripherals::I2C1;
 
@@ -308,8 +307,10 @@ pub mod yxz_bmi160 {
             let mut sensor 
                     = Bmi160::new_with_i2c(i2c, address);
             DISP.signal([None, Some("BMI160 |==| I2C".try_into().unwrap()), None, None]);
-            sensor.set_accel_power_mode(AccelerometerPowerMode::Normal).unwrap();
-            sensor.set_gyro_power_mode(GyroscopePowerMode::Normal).unwrap();
+            //let _ = sensor.set_accel_power_mode(AccelerometerPowerMode::Normal).unwrap();
+            DISP.signal([None, Some("BMI160 accel".try_into().unwrap()), None, None]);
+            //let _ = sensor.set_gyro_power_mode(GyroscopePowerMode::Normal).unwrap();
+            DISP.signal([None, Some("BMI160 gyro".try_into().unwrap()), None, None]);
             DISP.signal([None, None, None, Some("BMI160 set".try_into().unwrap())]);
             let mut ticker = Ticker::every(Duration::from_hz(hz));
             DISP.signal([None, None, None, Some("BMI160 ticks".try_into().unwrap())]);
@@ -340,6 +341,52 @@ pub mod yxz_bmi160 {
                 }
             }
         }
+
+
+
+pub mod yirt_max {
+    use super::*;
+    use max3010x::{Max3010x, Led, SampleAveraging};
+    use hal::peripherals::I2C1 as I2C;
+
+    /* control channels */
+    pub static READY: AtomicBool = AtomicBool::new(false);
+    pub static RECORD: AtomicBool = AtomicBool::new(false);
+    pub type Reading = [u32; 8]; /// <--- 4 channel is total accel for now
+    pub type Measure = SensorResult<Reading>;
+
+    #[embassy_executor::task]
+    pub async fn task(  i2c: i2c::I2c<'static, I2C, i2c::Async>,
+                        hz: u64) {    
+        // Sensor specific
+        let sensor = Max3010x::new_max30102(i2c);
+        let mut sensor = sensor.into_heart_rate().unwrap();
+        sensor.set_sample_averaging(SampleAveraging::Sa4).unwrap();
+        sensor.set_pulse_amplitude(Led::All, 15).unwrap();
+        sensor.enable_fifo_rollover().unwrap();        
+        let mut data = [0; 8];
+        let _ = sensor.read_fifo(&mut data).unwrap();
+        DISP.signal([None, None, None, Some("IRTmax reads".try_into().unwrap())]);
+        // Ticker
+        let mut ticker = Ticker::every(Duration::from_hz(hz));
+        let mut result: SensorResult<Reading>;
+        READY.store(true, Ordering::Relaxed);
+        loop {
+            if RECORD.load(Ordering::Relaxed){
+                let mut reading = [0;8];
+                let _ = sensor.read_fifo(&mut reading);
+                result = Measure{time: Instant::now(), reading: reading};
+                log::info!("{},1,{},{},{},{},{},{},{},{}",
+                    result.time.as_micros(),
+                    result.reading[0], result.reading[1], result.reading[2],
+                    result.reading[3], result.reading[4], result.reading[5],
+                    result.reading[6], result.reading[7]);
+                ticker.next().await;
+                };
+                
+            }
+        }
+    }
 
 pub mod yirt { // MLX90614
     /* Sensor Generics */

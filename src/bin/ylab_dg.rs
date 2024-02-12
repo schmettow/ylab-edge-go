@@ -8,7 +8,7 @@ static DEV: [bool; 3] = [true, true, false];
 static HZ: [u64; 3] = [5, 10, 30];
 //static HZ: [u64; 3] = [1, 3, 5];
 
-use ylab::{ysns::yco2, yuio::disp::TEXT as DISP};
+use ylab::{ysns::{yco2, yirt_max}, yuio::disp::TEXT as DISP};
 use {defmt_rtt as _, panic_probe as _};
 
 /// # YLab Edge Go
@@ -161,23 +161,17 @@ fn init() -> ! {
 
         executor1.run(|spawner|{
 
-            // Activating the built-in ADC controller
-            // and spawning the ADC task
-            
-
-
             //#[cfg(feature = "lsm6-grove4")]
             // Activating the second I2C controller on Grove 4
             // and spawning a task for the Yxz acceleration sensor
             if DEV[1]{
+                use ylab::ysns::yirt_max::task as task;
                 let i2c1 
                     = i2c::I2c::new_async(p.I2C1, p.PIN_7, p.PIN_6,
                                     Irqs,
                                     i2c::Config::default());
-                let disp_text: ydsp::FourLines = [None, Some("I2C Grove 4"
-                                                                .try_into().unwrap()), None,None];
-                DISP.signal(disp_text);
-                unwrap!(spawner.spawn(ylab::ysns::yco2::task(i2c1)));
+                DISP.signal([None, Some("I2C1@Grove".try_into().unwrap()), None,None]);
+                unwrap!(spawner.spawn(task(i2c1, HZ[1])));
             }
 
         })
@@ -234,7 +228,9 @@ async fn control_task() {
     yxz_lsm6::RECORD.store(true, Ordering::Relaxed);
     yxz_bmi160::RECORD.store(true, Ordering::Relaxed);
     yco2::RECORD.store(true, Ordering::Relaxed);
-    DISP.signal([ Some("YLab CTRL... OK".try_into().unwrap()) ,None, None, None]);
+    yirt_max::RECORD.store(true, Ordering::Relaxed);
+    yled::LED.signal(yled::State::Steady);
+    //DISP.signal([ Some("YLab CTRL... OK".try_into().unwrap()) ,None, None, None]);
 
     // The main loop of the control task. 
     // Sometimes I miss the poetry of `while true`
@@ -273,7 +269,7 @@ async fn control_task() {
                     //yads1::RECORD.store(false, Ordering::Relaxed);
                     yxz_lsm6::RECORD.store(false, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(false, Ordering::Relaxed);
-                    //yirt::RECORD.store(false, Ordering::Relaxed);
+                    yirt_max::RECORD.store(false, Ordering::Relaxed);
                     DISP.signal([ Some("New".try_into().unwrap()), None, None, None]);
                     },
                 AppState::Ready     => {
@@ -283,7 +279,7 @@ async fn control_task() {
                     //yads1::RECORD.store(false, Ordering::Relaxed);
                     yxz_lsm6::RECORD.store(false, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(false, Ordering::Relaxed);
-                    //yirt::RECORD.store(false, Ordering::Relaxed);
+                    yirt_max::RECORD.store(false, Ordering::Relaxed);
                     DISP.signal([ Some("Ready".try_into().unwrap()),None, None,None]);
                     
                     },
@@ -295,7 +291,7 @@ async fn control_task() {
                     yxz_lsm6::RECORD.store(true, Ordering::Relaxed);
                     yxz_bmi160::RECORD.store(true, Ordering::Relaxed);
                     yco2::RECORD.store(true, Ordering::Relaxed);
-                    //yirt::RECORD.store(true, Ordering::Relaxed);
+                    yirt_max::RECORD.store(true, Ordering::Relaxed);
                     DISP.signal([ Some("Record".try_into().unwrap()),None, None,None]);
                     }
             }
