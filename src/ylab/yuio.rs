@@ -1,4 +1,4 @@
-
+use crate::*;
 pub mod led {
 
     // LED control
@@ -47,7 +47,6 @@ pub mod led {
 }
 
 pub mod disp {
-    use crate::*;
     use super::*;
     use hal::i2c;
     use hal::peripherals::I2C0; 

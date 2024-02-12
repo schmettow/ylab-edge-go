@@ -1,8 +1,7 @@
-
+pub use crate::*;
 
 /* YLab transport formats  */
 pub mod bsu {
-    use crate::*;
     use super::*;
     /* USB Logging */
     use hal::bind_interrupts;
