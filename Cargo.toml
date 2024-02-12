@@ -34,21 +34,18 @@ fixed-macro = "1.2.0"
 smart-leds = "0.4.0"
 embedded-hal = "1.0.0"
 lsm6ds33 = "0.5.0"
-# embedded-hal-async = "0.2.0-alpha.1"
 ads1x1x = "0.2.2"
 #embedded-ads111x = "0.1.1"
 ssd1306 = "0.8.0"
 embedded-graphics = "0.8.0"
 itoa = "1.0.9"
 heapless = "0.8.0"
-#usbd-serial = "0.1.1"
-#rp2040-hal = "0.8.2"
-#usb-device = "0.2.9"
-#embedded-sdmmc = "0.5.0"
 nb = "1.1.0"
 bmi160 = "1.0.0"
 # bmi160 = {path = "../bmi160-async"}
 mlx9061x = "0.2.1"
+scd4x = { version = "0.2.2", default-features=false, features = ["scd41"] }
+#scd4x = { path = "../scd4x-rs", features = ["scd41"] }
 
 
 ## network drivers for cyw43 (pico W) or wiznet w5500
