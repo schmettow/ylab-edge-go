@@ -4,8 +4,8 @@
 /// CONFIGURATION
 /// 
 /// Adc Lsm6 Lsm6 Bmi 
-static DEV: (bool, bool, bool, bool, bool) = (false, false, false, false, true);
-static HZ: (u64, u64, u64, u64, u64) = (1, 97, 97, 5, 1);
+static DEV: (bool, bool, bool, bool, bool) = (false, false, true, false, false);
+static HZ: (u64, u64, u64, u64, u64) = (1, 97, 217, 5, 1);
 
 use ylab::{ysns::{yco2, yirt_max}, yuio::disp::TEXT as DISP};
 use {defmt_rtt as _, panic_probe as _};
@@ -134,8 +134,6 @@ bind_interrupts!(struct Irqs {
     ADC_IRQ_FIFO => adc::InterruptHandler;
 });
 
-
-
 /// Because the program runs on two cores,
 /// the `init` function is the entry point, not `main`.
 
@@ -164,17 +162,18 @@ fn init() -> ! {
                         = i2c::I2c::new_async(i2c_contr, p.PIN_1, p.PIN_0,
                                         Irqs,
                                         i2c::Config::default());
+                        
                         DISP.signal([None, Some("0-1-LSM".try_into().unwrap()), None,None]);
                         unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::task(i2c, HZ.1)));
                     },
                 (_,false, true, false, false) 
-                =>  {   // LSM on Grove 3
-                        let i2c 
+                =>  {   // LSM on Grove 3 in shared peripherals mode
+                        /*let i2c 
                             = i2c::I2c::new_async(i2c_contr, p.PIN_5, p.PIN_4,
                                             Irqs,
-                                            i2c::Config::default());
+                                            i2c::Config::default());*/
                         DISP.signal([None, Some("0-3-LSM".try_into().unwrap()), None,None]);
-                        unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::task(i2c, HZ.2)));
+                        unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::shared_task(i2c_contr, p.PIN_5, p.PIN_4, Irqs, HZ.2)));
                         }
                 (_,false, false, true, false) 
                 =>  {   // BMI on Grove 5
