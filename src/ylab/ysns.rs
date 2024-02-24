@@ -1,6 +1,7 @@
 pub use crate::*;
 pub use yuio::disp::TEXT as DISP;
 use hal::i2c;
+use i2c::Async as Mode;
 
 pub struct SensorResult<R> {
     pub time: Instant,
@@ -231,11 +232,11 @@ pub mod ads1115 {
 
 */
 
-pub mod yxz_lsm6 {
+pub mod yxz_lsm6_old {
     use super::*;
-    use hal::peripherals::I2C1 as I2C;
-    use i2c::Blocking as Mode;
+    use hal::peripherals::I2C0 as I2C;
     use lsm6ds33::Lsm6ds33 as Lsm6;
+    use i2c::Blocking as Mode;
 
     /* control channels */
     pub static READY: AtomicBool = AtomicBool::new(false);
@@ -253,7 +254,7 @@ pub mod yxz_lsm6 {
     pub async fn task(  i2c: i2c::I2c<'static, I2C, Mode>,
                         hz: u64) { 
         DISP.signal([None, None, None, Some("Lsm6 task".try_into().unwrap())]);         
-        let sensor_res = Lsm6::new(i2c, 0x6Au8);
+        let sensor_res: Result<Lsm6<i2c::I2c<'_, I2C, Mode>>, (i2c::I2c<'_, I2C, Mode>, lsm6ds33::Error<i2c::Error>)> = Lsm6::new(i2c, 0x6Au8);
         let mut sensor 
                 = match sensor_res {
                     Result::Ok(sensor) => sensor,
@@ -266,11 +267,9 @@ pub mod yxz_lsm6 {
         let mut reading: Reading;
         let mut result: SensorResult<Reading>;
         READY.store(true, Ordering::Relaxed);
-        DISP.signal([None, None, None, 
-            Some("Lsm6 ticking".try_into().unwrap())]);
+        DISP.signal([None, None, None, Some("Lsm6 ticking".try_into().unwrap())]);
         loop {
-            DISP.signal([None, None, None, 
-                Some("Lsm6 reading".try_into().unwrap())]);
+            //DISP.signal([None, None, None, Some("Lsm6 reading".try_into().unwrap())]);
             ticker.next().await;
             if RECORD.load(Ordering::Relaxed){
                 reading = sensor.read_accelerometer().unwrap().into();   
@@ -285,13 +284,86 @@ pub mod yxz_lsm6 {
         }
     }
 
+
+pub mod yxz_lsm6 {
+    use super::*;
+    use hal::peripherals::I2C0 as I2C;
+    use accelerometer::Accelerometer;
+    use lsm6dsox::*;
+    use Lsm6dsox as Lsm6;
+
+    /* control channels */
+    pub static READY: AtomicBool = AtomicBool::new(false);
+    pub static RECORD: AtomicBool = AtomicBool::new(false);
+
+    // Generic result
+    /*pub struct SensorResult<R> {
+        pub time: Instant,
+        pub reading: R,
+    }*/
+    pub type Reading = [f32; 6]; /// <--- 4 channel is total accel for now
+    pub type Measure = SensorResult<Reading>;
+
+    #[embassy_executor::task]
+    pub async fn task(  i2c: i2c::I2c<'static, I2C, Mode>,
+                        hz: u64) { 
+        DISP.signal([None, None, None, Some("Lsm6 task".try_into().unwrap())]);
+        let mut sensor 
+            = Lsm6::new(i2c, SlaveAddress::Low, time::Delay);
+        DISP.signal([None, None, None, Some("Lsm6 |==| I2C".try_into().unwrap())]);
+        sensor.setup().unwrap();
+        sensor.set_accel_sample_rate(DataRate::Freq416Hz).unwrap();
+        sensor.set_accel_scale(AccelerometerScale::Accel2g).unwrap();
+        sensor.set_gyro_sample_rate(DataRate::Freq416Hz).unwrap();
+        sensor.set_gyro_scale(GyroscopeScale::Dps250).unwrap();
+        DISP.signal([None, None, None, Some("Lsm6 set".try_into().unwrap())]);
+        let _ = sensor.accel_norm().unwrap() ;
+        DISP.signal([None, None, None, Some("Lsm6 accel".try_into().unwrap())]);
+
+        let _ = sensor.angular_rate().unwrap();
+        DISP.signal([None, None, None, Some("Lsm6 gyro".try_into().unwrap())]);
+        let mut ticker 
+                = Ticker::every(Duration::from_hz(hz));
+        let mut reading: Reading;
+        let mut result: SensorResult<Reading>;
+        READY.store(true, Ordering::Relaxed);
+        DISP.signal([None, None, None, Some("Lsm6 ticking".try_into().unwrap())]);
+        //let mut i = 0;
+        loop {
+            ticker.next().await;
+            if RECORD.load(Ordering::Relaxed){
+                //DISP.signal([None, None, None, Some("Lsm6 reading".try_into().unwrap())]);
+                let accel = sensor.accel_norm().unwrap();
+                let gyro = sensor.angular_rate().unwrap();
+                reading = [ accel.x, accel.y, accel.z,
+                            gyro.x.as_rpm() as f32, 
+                            gyro.y.as_rpm() as f32, 
+                            gyro.z.as_rpm() as f32];
+
+                result = Measure{time: Instant::now(), reading: reading};
+                log::info!("{},0,{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},,", 
+                    result.time.as_micros(),
+                    result.reading[0],
+                    result.reading[1],
+                    result.reading[2],
+                    result.reading[3],
+                    result.reading[4],
+                    result.reading[5],);
+                };
+            }
+        }
+    }
+    
+
+
+
 /// ## BMI Acceleration Sensor
 
 pub mod yxz_bmi160 {
         use super::*;
         #[allow(unused)]
         use bmi160::{AccelerometerPowerMode, Bmi160, GyroscopePowerMode, SensorSelector, SlaveAddr};
-        use hal::peripherals::I2C1;
+        use hal::peripherals::I2C0 as I2C;
 
         /* control channels */
         pub static READY: AtomicBool = AtomicBool::new(false);
@@ -300,16 +372,16 @@ pub mod yxz_bmi160 {
         pub type Measure = SensorResult<Reading>;
 
         #[embassy_executor::task]
-        pub async fn task(  i2c: i2c::I2c<'static, I2C1, i2c::Blocking>,
+        pub async fn task(  i2c: i2c::I2c<'static, I2C, Mode>,
                             hz: u64) {    
             DISP.signal([None, None, None, Some("BMI160 task".try_into().unwrap())]);
             let address = SlaveAddr::default();
             let mut sensor 
                     = Bmi160::new_with_i2c(i2c, address);
             DISP.signal([None, Some("BMI160 |==| I2C".try_into().unwrap()), None, None]);
-            //let _ = sensor.set_accel_power_mode(AccelerometerPowerMode::Normal).unwrap();
+            sensor.set_accel_power_mode(AccelerometerPowerMode::Normal).unwrap();
             DISP.signal([None, Some("BMI160 accel".try_into().unwrap()), None, None]);
-            //let _ = sensor.set_gyro_power_mode(GyroscopePowerMode::Normal).unwrap();
+            sensor.set_gyro_power_mode(GyroscopePowerMode::Normal).unwrap();
             DISP.signal([None, Some("BMI160 gyro".try_into().unwrap()), None, None]);
             DISP.signal([None, None, None, Some("BMI160 set".try_into().unwrap())]);
             let mut ticker = Ticker::every(Duration::from_hz(hz));
@@ -320,13 +392,13 @@ pub mod yxz_bmi160 {
             loop {
                 ticker.next().await;
                 if RECORD.load(Ordering::Relaxed){
-                    DISP.signal([None, None, None, Some("BMI160... TRY".try_into().unwrap())]);
+                    DISP.signal([None, None, None, Some("BMI160 ...".try_into().unwrap())]);
                     let data = sensor.data(SensorSelector::new().accel().gyro()).unwrap();
                     let acc = data.accel.unwrap();
                     let gyr = data.gyro.unwrap();
-                    DISP.signal([None, None, None, Some("BMI160... RD".try_into().unwrap())]);
-                    reading = [acc.x.into(), acc.y.into(), acc.z.into(),
-                    gyr.x.into(), gyr.y.into(), gyr.z.into()];
+                    DISP.signal([None, None, None, Some("BMI160     ...".try_into().unwrap())]);
+                    reading = [ acc.x.into(), acc.y.into(), acc.z.into(),
+                                gyr.x.into(), gyr.y.into(), gyr.z.into()];
                     result = Measure{time: Instant::now(), 
                             reading: reading.into()};
                     log::info!("{},1,{},{},{},{},{},{},,",
@@ -347,7 +419,7 @@ pub mod yxz_bmi160 {
 pub mod yirt_max {
     use super::*;
     use max3010x::{Max3010x, Led, SampleAveraging};
-    use hal::peripherals::I2C1 as I2C;
+    use hal::peripherals::I2C0 as I2C;
 
     /* control channels */
     pub static READY: AtomicBool = AtomicBool::new(false);
@@ -356,31 +428,32 @@ pub mod yirt_max {
     pub type Measure = SensorResult<Reading>;
 
     #[embassy_executor::task]
-    pub async fn task(  i2c: i2c::I2c<'static, I2C, i2c::Async>,
-                        hz: u64) {    
+    pub async fn task(  i2c: i2c::I2c<'static, I2C, Mode>,
+                        hz: u64) {
         // Sensor specific
-        let sensor = Max3010x::new_max30102(i2c);
-        let mut sensor = sensor.into_heart_rate().unwrap();
-        sensor.set_sample_averaging(SampleAveraging::Sa4).unwrap();
+        let mut sensor 
+            = Max3010x::new_max30102(i2c).into_multi_led().unwrap();
+        sensor.set_sampling_rate(max3010x::SamplingRate::Sps1600).unwrap();
+        sensor.set_sample_averaging(SampleAveraging::Sa16).unwrap();
         sensor.set_pulse_amplitude(Led::All, 15).unwrap();
-        sensor.enable_fifo_rollover().unwrap();        
-        let mut data = [0; 8];
+        sensor.enable_fifo_rollover().unwrap();
+        sensor.wake_up().unwrap();
+
+        let mut data: [u32; 1] = [0; 1];
         let _ = sensor.read_fifo(&mut data).unwrap();
-        DISP.signal([None, None, None, Some("IRTmax reads".try_into().unwrap())]);
+        DISP.signal([None, None, None, Some("IRTmax can read".try_into().unwrap())]);
         // Ticker
         let mut ticker = Ticker::every(Duration::from_hz(hz));
-        let mut result: SensorResult<Reading>;
+        //let mut result: SensorResult<Reading>;
         READY.store(true, Ordering::Relaxed);
         loop {
             if RECORD.load(Ordering::Relaxed){
-                let mut reading = [0;8];
+                let mut reading = [0;1];
                 let _ = sensor.read_fifo(&mut reading);
-                result = Measure{time: Instant::now(), reading: reading};
-                log::info!("{},1,{},{},{},{},{},{},{},{}",
-                    result.time.as_micros(),
-                    result.reading[0], result.reading[1], result.reading[2],
-                    result.reading[3], result.reading[4], result.reading[5],
-                    result.reading[6], result.reading[7]);
+                //result = Measure{time: Instant::now(), reading: reading};
+                log::info!("{},1,{},,,,,,,",
+                    Instant::now().as_micros(),
+                    reading[0]);
                 ticker.next().await;
                 };
                 
@@ -440,7 +513,7 @@ pub mod yirt { // MLX90614
 
 pub mod yco2 {
     use super::*;
-    use hal::peripherals::I2C1;
+    use hal::peripherals::I2C0;
     use scd4x;
 
     /* control channels */
@@ -448,11 +521,11 @@ pub mod yco2 {
     pub static RECORD: AtomicBool = AtomicBool::new(false);
 
     // Generic result
-    pub type Reading = [f32; 3]; /// <--- 4 channel is total accel for now
+    pub type Reading = [f32; 3]; 
     pub type Measure = SensorResult<Reading>;
 
     #[embassy_executor::task]
-    pub async fn task(  i2c: i2c::I2c<'static, I2C1, i2c::Async>) { 
+    pub async fn task(  i2c: i2c::I2c<'static, I2C0, Mode>) { 
         //DISP.signal([None, None, None, Some("CO2 start".try_into().unwrap())]);        
         let mut sensor = scd4x::Scd4x::new(i2c, time::Delay);
         //sensor.wake_up(); <---- This fails
@@ -479,7 +552,7 @@ pub mod yco2 {
                                 let reading: Reading = [raw.co2 as f32, raw.humidity as f32, raw.temperature as f32];
                                 result = Measure{time: Instant::now(), reading: reading};
                                 //DISP.signal([None, None, None, Some("CO2 read".try_into().unwrap())]);
-                                log::info!("{},1,{},{},{},,,,",
+                                log::info!("{},1,{},{},{},,,,,",
                                     result.time.as_micros(),
                                     result.reading[0],
                                     result.reading[1],
