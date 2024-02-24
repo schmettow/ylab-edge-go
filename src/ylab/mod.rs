@@ -1,7 +1,7 @@
 #![no_std]
 
 pub use embassy_time as time;
-pub use time::{Duration, Ticker, Instant};
+pub use time::{Duration, Ticker, Instant, Delay};
 pub use embassy_rp as hal;
 pub use heapless::{Vec, String};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as Mutex;
