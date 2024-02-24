@@ -49,7 +49,8 @@ pub mod led {
 pub mod disp {
     use super::*;
     use hal::i2c;
-    use hal::peripherals::I2C0; 
+    use hal::peripherals::I2C1 as I2C;
+    use i2c::Async as Mode;
 
     //pub use heapless::String;
     // use itoa;
@@ -73,7 +74,7 @@ pub mod disp {
     use core::fmt::Write;
 
     #[embassy_executor::task]
-    pub async fn task(i2c: i2c::I2c<'static, I2C0, i2c::Async>) {
+    pub async fn task(i2c: i2c::I2c<'static, I2C, Mode>) {
         let interface 
             = I2CDisplayInterface::new(i2c);
         let mut display =
