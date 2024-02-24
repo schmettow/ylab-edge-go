@@ -46,7 +46,7 @@ bmi160 = "1.0.0"
 mlx9061x = "0.2.1"
 scd4x = { version = "0.2.2", default-features=false, features = ["scd41"] }
 max3010x = {version = "0.1.0", default-features=false}
-#scd4x = { path = "../scd4x-rs", features = ["scd41"] }
+lsm6dsox = "1.0.1"
 
 
 ## network drivers for cyw43 (pico W) or wiznet w5500
