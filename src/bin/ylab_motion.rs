@@ -4,8 +4,8 @@
 /// CONFIGURATION
 /// 
 /// Adc Tcm
-static DEV: (bool, bool) = (true, false);
-static HZ: (u64, u64) = (1, 500);
+static DEV: (bool, bool) = (true, true);
+static HZ: (u64, u64) = (1, 5);
 
 use ylab::{ysns::{yco2, yirt_max}, yuio::disp::TEXT as DISP};
 use {defmt_rtt as _, panic_probe as _};
@@ -97,7 +97,7 @@ fn init() -> ! {
                                         Irqs,
                                         i2c::Config::default());
                         DISP.signal([None, Some("0-1-LSM".try_into().unwrap()), None,None]);
-                        unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::multi_task(i2c, 200, true)));
+                        unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::multi_task(i2c, HZ.1, false)));
                     },
                 (_,false) 
                 =>  {}
