@@ -1,13 +1,14 @@
-use crate::*;
-pub mod led {
+pub use crate::*;
 
+pub mod led {
     // LED control
+    use super::*;
     use embassy_time::{Duration, Timer};
     use embassy_rp::gpio::{AnyPin, Output, Level};
-    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    //use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use embassy_sync::signal::Signal;
     pub enum State {Vibrate, Blink, Steady, Interrupt, Off}
-    pub static LED: Signal<CriticalSectionRawMutex, State> = Signal::new();
+    pub static LED: Signal<RawMutex, State> = Signal::new();
     
     #[embassy_executor::task]
     pub async fn task(led_pin: AnyPin) {
@@ -67,7 +68,7 @@ pub mod disp {
     pub type OneLine = String<20>;
     pub type FourLines = [Option<OneLine>; 4];
     
-    pub static TEXT: Signal<Mutex, FourLines> 
+    pub static TEXT: Signal<RawMutex, FourLines> 
                 = Signal::new();
 
     // Text display
@@ -86,7 +87,7 @@ pub mod disp {
             Err(_) => {},
             Ok(_) => {
                 display.init().unwrap();
-                let _ = display.write_str("Ydsp");
+                //let _ = display.write_str("Ydsp");
                         
                 loop {
                     let mesg: FourLines = TEXT.wait().await;
