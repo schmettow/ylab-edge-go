@@ -367,7 +367,6 @@ pub mod yxz_lsm6 {
             let sen_1 = Lsm6::new(i2c_hub.i2c0, SlaveAddress::Low, time::Delay);
             let sen_2 = Lsm6::new(i2c_hub.i2c1, SlaveAddress::Low, time::Delay);
             let mut sensory = [sen_1, sen_2];
-            DISP.signal([None, None, None, Some("Got 2 LSM6".try_into().unwrap())]);
             sensory.iter_mut().for_each(|x|
                                 {   //x.setup().unwrap();
                                     let data_rate = DataRate::Freq6660Hz;
@@ -375,35 +374,31 @@ pub mod yxz_lsm6 {
                                     x.set_gyro_sample_rate(data_rate).unwrap();
                                     //x.accel_raw().unwrap();
                                 });
+            DISP.signal([None, None, None, Some("LSM6 Sensory".try_into().unwrap())]);
             let mut ticker 
                     = Ticker::every(Duration::from_hz(hz));
             let mut reading: Reading;
             let mut result: SensorResult<Reading>;
             READY.store(true, Ordering::Relaxed);
-            DISP.signal([None, None, None, Some("Lsm6 ticking".try_into().unwrap())]);
-            //let mut i = 0;
             loop {
-                let t_000 = Instant::now(); 
-                if !just_spin {ticker.next().await};
+                if !just_spin {ticker.next().await;};
                 if RECORD.load(Ordering::Relaxed){
-                    let t_00 = Instant::now();
-                    DISP.signal([None, None, None, Some("Lsm6 reading".try_into().unwrap())]);
                     let t_0 = Instant::now();
-                    log::info!("{}, {}","D" , (t_0 - t_00).as_micros());
                     for (i, sensor) in sensory.as_mut().into_iter().enumerate() {
                         let t_1 = Instant::now();
+                        log::debug!("{}, {}","t_LOG : " , (t_1 - t_0).as_micros());
                         let accel = sensor.accel_norm().unwrap();
-                        //DISP.signal([None, None, None, Some("Got Xcel".try_into().unwrap())]);
                         let t_2 = Instant::now();
+                        log::debug!("{}, {}","t_Xcel: " , (t_2 - t_1).as_micros());
                         let gyro = sensor.angular_rate().unwrap();
-                        //DISP.signal([None, None, None, Some("Got Gyro".try_into().unwrap())]);
                         let t_3 = Instant::now();
+                        log::debug!("{}, {}","t_Gyro: " , (t_3 - t_2).as_micros());
                         reading = [ accel.x, accel.y, accel.z,
                                 gyro.x.as_rpm() as f32, 
                                 gyro.y.as_rpm() as f32, 
                                 gyro.z.as_rpm() as f32];
                         result = Measure{time: Instant::now(), reading: reading};
-                        /*log::info!("{},{},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},,", 
+                        log::info!("{},{},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},,", 
                             result.time.as_micros(),
                             i,
                             result.reading[0],
@@ -411,12 +406,7 @@ pub mod yxz_lsm6 {
                             result.reading[2],
                             result.reading[3],
                             result.reading[4],
-                            result.reading[5],);*/
-                        let t_4 = Instant::now();
-                        log::info!("{}, {}, {}, {}",i , (t_2 - t_1).as_micros(), (t_3 - t_2).as_micros(), (t_4 - t_3).as_micros());
-                        let t_5 = Instant::now();
-                        log::info!("L, {}, {}",i , (t_2 - t_1).as_micros(), (t_3 - t_2).as_micros(), (t_4 - t_3).as_micros());
-
+                            result.reading[5],);
                         }
                     };
                 }
@@ -462,10 +452,12 @@ pub mod yxz_lsm6 {
     /// One-shot read
     /// 
     /// does a full round of initialization and one
+    /// DEACTIVATED, because interrupt binding collides.
 
-    pub async fn read(i2c: &'static SharedI2C,
-        scl: &'static  Mutex<RawMutex, Option<impl i2c::SclPin<I2C>>>,
-        sda: &'static  Mutex<RawMutex, Option<impl i2c::SdaPin<I2C>>>,)
+    pub async fn read(_i2c: &'static SharedI2C,
+        
+        _scl: &'static  Mutex<RawMutex, Option<impl i2c::SclPin<I2C>>>,
+        _sda: &'static  Mutex<RawMutex, Option<impl i2c::SdaPin<I2C>>>,)
         -> Result<Option<Reading>,Error>
         {
             

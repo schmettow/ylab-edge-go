@@ -4,35 +4,14 @@
 /// CONFIGURATION
 /// 
 /// Adc Tcm
-static DEV: (bool, bool) = (true, true);
-static HZ: (u64, u64) = (1, 5);
+static DEV: (bool, bool) = (false, true);
+static HZ: (u64, u64) = (1, 400);
+static SPEED: u32 = 300_000;
 
 use ylab::{ysns::{yco2, yirt_max}, yuio::disp::TEXT as DISP};
 use {defmt_rtt as _, panic_probe as _};
 
-/// # YLab Edge Go
-/// 
-/// __YLab Edge Go__ is a sensor recording firmware for the Cytron Maker Pi Pico
-/// board. It uses Grove connectors for a variety of sensor modules. 
-/// 
-/// The system runs on both cores of the RP2040. 
-/// It use a concurrent, cooperative multi-actor system,
-/// with one task per sensor or ui element. 
-/// The control flow is kept in a separate task, which receives and sends 
-/// messages to the other actors.
-/// 
-/// 
-/// ## Dependencies
-/// 
-/// YLab Edge makes use of the Embassy framework, in particular:
-/// 
-/// + multi-core
-/// + async routines
-/// + Timing
-/// + concurrency-safe data containers
-/// 
-/// For running multicore, we need Executor (not just spawner) 
-/// and deformat macros (!unwrap)
+
 use embassy_executor::Executor;
 #[allow(unused_imports)]
 use hal::adc::{Async, Blocking};
@@ -92,14 +71,16 @@ fn init() -> ! {
             match DEV {
                 (_,true) 
                 =>  {   // LSM on Grove 1
+                        let mut mode = Config::default();
+                        mode.frequency = SPEED.into();
                         let i2c 
                         = i2c::I2c::new_async(i2c_contr, p.PIN_1, p.PIN_0,
                                         Irqs,
-                                        i2c::Config::default());
+                                        mode);
                         DISP.signal([None, Some("0-1-LSM".try_into().unwrap()), None,None]);
                         unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::multi_task(i2c, HZ.1, false)));
                     },
-                (_,false) 
+                (_,false)
                 =>  {}
                 }
 
