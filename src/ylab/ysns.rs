@@ -285,6 +285,8 @@ pub mod yxz_lsm6_old {
     }
 
 
+
+
 pub mod yxz_lsm6 {
     use super::*;
     use hal::peripherals::I2C0 as I2C;
@@ -354,6 +356,56 @@ pub mod yxz_lsm6 {
         }
 
 
+        use xca9548a::{Xca9548a, SlaveAddr};
+        #[embassy_executor::task]
+        pub async fn multi_task(i2c: i2c::I2c<'static, I2C, Mode>,
+                                hz: u64, spin: bool) { 
+            log::info!("");
+            DISP.signal([None, None, None, Some("Lsm6 task".try_into().unwrap())]);
+            let tca = Xca9548a::new(i2c, SlaveAddr::default());
+            DISP.signal([None, None, None, Some("TCA |==| I2C".try_into().unwrap())]);
+            let i2c_hub = tca.split();
+            let sen_1 = Lsm6::new(i2c_hub.i2c0, SlaveAddress::Low, time::Delay);
+            let sen_2 = Lsm6::new(i2c_hub.i2c1, SlaveAddress::Low, time::Delay);
+            let mut sensory = [sen_1, sen_2];
+            DISP.signal([None, None, None, Some("Got 2 LSM6".try_into().unwrap())]);
+            sensory.iter_mut().for_each(|x|
+                                {   x.setup().unwrap();
+                                    x.set_accel_sample_rate(DataRate::Freq416Hz).unwrap();
+                                    x.set_gyro_sample_rate(DataRate::Freq416Hz).unwrap();});
+            let mut ticker 
+                    = Ticker::every(Duration::from_hz(hz));
+            let mut reading: Reading;
+            let mut result: SensorResult<Reading>;
+            READY.store(true, Ordering::Relaxed);
+            DISP.signal([None, None, None, Some("Lsm6 ticking".try_into().unwrap())]);
+            //let mut i = 0;
+            loop {
+                if spin {ticker.next().await;}
+                if RECORD.load(Ordering::Relaxed){
+                    for (i, sensor) in sensory.as_mut().into_iter().enumerate() {
+                        let accel = sensor.accel_norm().unwrap();
+                        let gyro = sensor.angular_rate().unwrap();
+                        reading = [ accel.x, accel.y, accel.z,
+                                gyro.x.as_rpm() as f32, 
+                                gyro.y.as_rpm() as f32, 
+                                gyro.z.as_rpm() as f32];
+                        result = Measure{time: Instant::now(), reading: reading};
+                        log::info!("{},0,{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},,", 
+                            result.time.as_micros(),
+                            result.reading[0],
+                            result.reading[1],
+                            result.reading[2],
+                            result.reading[3],
+                            result.reading[4],
+                            result.reading[5],);
+                        }
+                    };
+                }
+            }
+    
+
+
 
     use hal::bind_interrupts;
     type SharedI2C = Mutex<RawMutex, Option<I2C>>;
@@ -398,11 +450,12 @@ pub mod yxz_lsm6 {
         sda: &'static  Mutex<RawMutex, Option<impl i2c::SdaPin<I2C>>>,)
         -> Result<Option<Reading>,Error>
         {
-            bind_interrupts!(struct Irqs {
+            
+        {   todo!();
+            // inner scope   
+            /* bind_interrupts!(struct Irqs {
                 I2C0_IRQ => i2c::InterruptHandler<I2C>;
             });
-
-        { // inner scope   
             let mut i2c_unlocked = i2c.lock().await;
             let mut scl = scl.lock().await;
             let mut sda = sda.lock().await;
@@ -435,7 +488,7 @@ pub mod yxz_lsm6 {
                     (Err(_), Err(_)) => return Ok(None),
                     (_,_) => Ok(None),
                     }
-            } else {return Err(lsm6dsox::Error::ResetFailed)}
+            } else {return Err(lsm6dsox::Error::ResetFailed)}*/
         }// inner scope
         }
 
