@@ -291,7 +291,7 @@ pub mod yxz_lsm6 {
     use super::*;
     use hal::peripherals::I2C0 as I2C;
     use accelerometer::Accelerometer;
-    use lsm6dsox::*;
+    use lsm6dsox::{accelerometer::RawAccelerometer, *};
     use Lsm6dsox as Lsm6;
 
     /* control channels */
@@ -359,9 +359,8 @@ pub mod yxz_lsm6 {
         use xca9548a::{Xca9548a, SlaveAddr};
         #[embassy_executor::task]
         pub async fn multi_task(i2c: i2c::I2c<'static, I2C, Mode>,
-                                hz: u64, spin: bool) { 
-            log::info!("");
-            DISP.signal([None, None, None, Some("Lsm6 task".try_into().unwrap())]);
+                                hz: u64, just_spin: bool) { 
+            DISP.signal([None, None, None, Some("Multi-Lsm6 task".try_into().unwrap())]);
             let tca = Xca9548a::new(i2c, SlaveAddr::default());
             DISP.signal([None, None, None, Some("TCA |==| I2C".try_into().unwrap())]);
             let i2c_hub = tca.split();
@@ -370,9 +369,12 @@ pub mod yxz_lsm6 {
             let mut sensory = [sen_1, sen_2];
             DISP.signal([None, None, None, Some("Got 2 LSM6".try_into().unwrap())]);
             sensory.iter_mut().for_each(|x|
-                                {   x.setup().unwrap();
-                                    x.set_accel_sample_rate(DataRate::Freq416Hz).unwrap();
-                                    x.set_gyro_sample_rate(DataRate::Freq416Hz).unwrap();});
+                                {   //x.setup().unwrap();
+                                    let data_rate = DataRate::Freq6660Hz;
+                                    x.set_accel_sample_rate(data_rate).unwrap();
+                                    x.set_gyro_sample_rate(data_rate).unwrap();
+                                    //x.accel_raw().unwrap();
+                                });
             let mut ticker 
                     = Ticker::every(Duration::from_hz(hz));
             let mut reading: Reading;
@@ -381,24 +383,40 @@ pub mod yxz_lsm6 {
             DISP.signal([None, None, None, Some("Lsm6 ticking".try_into().unwrap())]);
             //let mut i = 0;
             loop {
-                if spin {ticker.next().await;}
+                let 
+                if !just_spin {ticker.next().await};
                 if RECORD.load(Ordering::Relaxed){
+                    let t_00 = Instant::now();
+                    DISP.signal([None, None, None, Some("Lsm6 reading".try_into().unwrap())]);
+                    let t_0 = Instant::now();
+                    log::info!("{}, {}","D" , (t_0 - t_00).as_micros());
                     for (i, sensor) in sensory.as_mut().into_iter().enumerate() {
+                        let t_1 = Instant::now();
                         let accel = sensor.accel_norm().unwrap();
+                        //DISP.signal([None, None, None, Some("Got Xcel".try_into().unwrap())]);
+                        let t_2 = Instant::now();
                         let gyro = sensor.angular_rate().unwrap();
+                        //DISP.signal([None, None, None, Some("Got Gyro".try_into().unwrap())]);
+                        let t_3 = Instant::now();
                         reading = [ accel.x, accel.y, accel.z,
                                 gyro.x.as_rpm() as f32, 
                                 gyro.y.as_rpm() as f32, 
                                 gyro.z.as_rpm() as f32];
                         result = Measure{time: Instant::now(), reading: reading};
-                        log::info!("{},0,{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},,", 
+                        /*log::info!("{},{},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},,", 
                             result.time.as_micros(),
+                            i,
                             result.reading[0],
                             result.reading[1],
                             result.reading[2],
                             result.reading[3],
                             result.reading[4],
-                            result.reading[5],);
+                            result.reading[5],);*/
+                        let t_4 = Instant::now();
+                        log::info!("{}, {}, {}, {}",i , (t_2 - t_1).as_micros(), (t_3 - t_2).as_micros(), (t_4 - t_3).as_micros());
+                        let t_5 = Instant::now();
+                        log::info!("L, {}, {}",i , (t_2 - t_1).as_micros(), (t_3 - t_2).as_micros(), (t_4 - t_3).as_micros());
+
                         }
                     };
                 }
