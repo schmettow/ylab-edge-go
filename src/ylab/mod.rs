@@ -4,8 +4,9 @@ pub use embassy_time as time;
 pub use time::{Duration, Ticker, Instant, Delay};
 pub use embassy_rp as hal;
 pub use heapless::{Vec, String};
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as Mutex;
-use embassy_sync::signal::Signal;
+pub use embassy_sync::mutex::Mutex as Mutex;
+pub use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
+pub use embassy_sync::signal::Signal;
 
 pub use core::sync::atomic::Ordering;
 pub use core::sync::atomic::AtomicBool;
