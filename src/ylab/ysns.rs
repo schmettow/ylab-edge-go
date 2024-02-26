@@ -383,7 +383,7 @@ pub mod yxz_lsm6 {
             DISP.signal([None, None, None, Some("Lsm6 ticking".try_into().unwrap())]);
             //let mut i = 0;
             loop {
-                let 
+                let t_000 = Instant::now(); 
                 if !just_spin {ticker.next().await};
                 if RECORD.load(Ordering::Relaxed){
                     let t_00 = Instant::now();
