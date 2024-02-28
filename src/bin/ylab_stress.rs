@@ -4,20 +4,12 @@
 /// CONFIGURATION
 /// 
 /// Adc Tcm
-static DEV: (bool, bool) = (false, true);
-static HZ: (u64, u64) = (1, 400);
-static SPEED: u32 = 300_000;
+static DEV: (bool, bool) = (true, true);
+static HZ: (u64, u64) = (200, 1);
+static SPEED: u32 = 100_000;
 static RUN_DISP: bool = false;
-
-use ylab::{ysns::{yco2, yirt_max}, yuio::disp::TEXT as DISP};
 use {defmt_rtt as _, panic_probe as _};
 
-
-use embassy_executor::Executor;
-#[allow(unused_imports)]
-use hal::adc::{Async, Blocking};
-use hal::multicore::{spawn_core1, Stack};
-use defmt::*;
 
 /// The following code initializes the second stack, plus 
 /// two heaps
@@ -32,12 +24,12 @@ static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 // use embassy_time::{Duration, Ticker};
 /// + peripherals
 use hal::gpio::Pin;
-use ylab::ysns::yxz_bmi160;
-use ylab::ysns::yxz_lsm6;
 use ylab::yuio::led as yled;
 use ylab::yuio::disp as ydsp;
+use ydsp::TEXT as DISP;
 use ylab::yuii::btn as ybtn;
 use ylab::ysns::adc as yadc;
+use ylab::ysns::yco2;
 use ylab::ytfk::bsu as ybsu;
 
 #[derive(Debug,  // used as fmt
@@ -58,6 +50,12 @@ bind_interrupts!(struct Irqs {
 });
 
 
+use embassy_executor::Executor;
+#[allow(unused_imports)]
+use hal::adc::{Async, Blocking};
+use hal::multicore::{spawn_core1, Stack};
+use defmt::*;
+
 
 #[cortex_m_rt::entry]
 fn init() -> ! {
@@ -66,24 +64,24 @@ fn init() -> ! {
         let executor1 
             = EXECUTOR1.init(Executor::new());
 
-        executor1.run(|spawner|{
-          
+        executor1.run(|spawner|{   
             let i2c_contr  = p.I2C0;
             match DEV {
-                (_,true)
-                =>  {   // LSM on Grove 1
+                (_, true) 
+                =>  {   // CO2 on Grove 5
                         let mut config = Config::default();
                         config.frequency = SPEED.into();
                         let i2c 
-                        = i2c::I2c::new_async(i2c_contr, p.PIN_1, p.PIN_0,
+                            = i2c::I2c::new_async(i2c_contr, p.PIN_9, p.PIN_8,
                                         Irqs,
                                         config);
-                        DISP.signal([None, Some("0-1-LSM".try_into().unwrap()), None,None]);
-                        unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::multi_task(i2c, HZ.1, false)));
+                        DISP.signal([None, Some("0-5-CO2".try_into().unwrap()), None,None]);
+                        unwrap!(spawner.spawn(ylab::ysns::yco2::task(i2c)));
                     },
-                (_,_)
-                =>  {}
-            }
+                (_, _) =>  {},
+                }
+
+            
         })
     });
 
@@ -95,7 +93,7 @@ fn init() -> ! {
         unwrap!(spawner.spawn(yled::task(p.PIN_25.degrade())));
         // task for receiving text and put it on an OLED 1306
         // Display will use I2C1 on 
-        if RUN_DISP {
+        if RUN_DISP{
             let i2c_contr = p.I2C1;
             let i2c 
                 = i2c::I2c::new_async(i2c_contr, p.PIN_3, p.PIN_2, Irqs, Config::default());
@@ -106,12 +104,12 @@ fn init() -> ! {
         unwrap!(spawner.spawn(ybsu::task(p.USB)));
         // task to control sensors, storage and ui
         unwrap!(spawner.spawn(control_task()));
-        if DEV.0 {
+        if DEV.0{
             let adc0: adc::Adc<'_, Async> 
                 = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
             unwrap!(spawner.spawn(
                 yadc::task( adc0, 
-                            p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29, 
+                            p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29,
                             HZ.0)));
         };
     });
@@ -125,7 +123,7 @@ static RLX: Ordering = Ordering::Relaxed;
 async fn control_task() { 
     let mut state = AppState::Record;
     yadc::RECORD.store(true, RLX);
-    yxz_lsm6::RECORD.store(true, RLX);
+    yco2::RECORD.store(true, RLX);
     
     yled::LED.signal(yled::State::Steady);
     loop {
@@ -147,34 +145,21 @@ async fn control_task() {
                             // Reset all sensors and vibrate
                             yled::LED.signal(yled::State::Vibrate);
                             yadc::RECORD.store(false, RLX);
-                            //yads0::RECORD.store(false, RLX);
-                            //yads1::RECORD.store(false, RLX);
-                            yxz_lsm6::RECORD.store(false, RLX);
-                            yxz_bmi160::RECORD.store(false, RLX);
-                            yirt_max::RECORD.store(false, RLX);
+                            yco2::RECORD.store(false, RLX);
                             DISP.signal([ Some("New".try_into().unwrap()), None, None, None]);
                             },
                         AppState::Ready     => {
                             // Pause all sensors and blink
                             yled::LED.signal(yled::State::Blink);
                             yadc::RECORD.store(false, RLX);
-                            //yads0::RECORD.store(false, RLX);
-                            //yads1::RECORD.store(false, RLX);
-                            yxz_lsm6::RECORD.store(false, RLX);
-                            yxz_bmi160::RECORD.store(false, RLX);
-                            yirt_max::RECORD.store(false, RLX);
+                            yco2::RECORD.store(false, RLX);
                             DISP.signal([ Some("Ready".try_into().unwrap()),None, None,None]);
                             },
                         AppState::Record    => {
                             // Transmit sensor data and light up
                             yled::LED.signal(yled::State::Steady);
                             yadc::RECORD.store(true, RLX);
-                            //yads0::RECORD.store(true, RLX);
-                            //yads1::RECORD.store(true, RLX);
-                            yxz_lsm6::RECORD.store(true, RLX);
-                            yxz_bmi160::RECORD.store(true, RLX);
                             yco2::RECORD.store(true, RLX);
-                            yirt_max::RECORD.store(true, RLX);
                             DISP.signal([ Some("Record".try_into().unwrap()),None, None,None]);
                             }
                     }
