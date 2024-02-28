@@ -10,7 +10,8 @@ but is insufficient for large sensor arrays with high sample rates, e.g. motion 
 The solution is to re-implement the YLab API in the systems programming language [Rust](https://www.rust-lang.org/). 
 It is expected that this will trade around 20% ease-of-use for a performance improvement anywhere in the range between 2x and 200x.
 
-*YLab Edge Go* is the version to use for **RP2040** microcontrollers and currently reaches sample rates up to 3.000 SPS. Currently, Go is also the only version to support interaction via buttons, Led and Oled.
+*YLab Edge Go* is the version to use for **RP2040** microcontrollers and currently reaches sample rates up to 3.000 SPS. Currently, Go is also the only version to support interaction via buttons, Led and Oled. All code in this crate is currently developed for a `Cytron Maker Pi Pico` with Grove connectors. *Note* that the MP Pico is similar to the robotics-oriented Maker Pi RP2040, but not the same. However, any board derived from the Raspberry Pico should work with this code, if you wire it up, accordingly.
+
 
 ## Current status
 
@@ -47,9 +48,6 @@ If all went well, the boot drive will disappear and the Pico starts the new firm
 
 
 ## Installing from source
-
-All code in this crate is currently developed for 
-a `Cytron Maker Pi Pico`. *Note* that the MP Pico is similar to the robotics-oriented Maker Pi RP2040, but not the same. (See [here](https://github.com/9names/makerpi_rp2040), if you have the latter).
 
 To compile the latest version of YLab Edge:
 
