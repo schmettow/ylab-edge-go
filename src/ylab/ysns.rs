@@ -84,9 +84,9 @@ pub mod adc {
             ticker.next().await;
             if RECORD.load(Ordering::Relaxed){
                 reading = [ adc.read(&mut chan[0]).await.unwrap(),
-                            adc.read(&mut chan[0]).await.unwrap(),
-                            adc.read(&mut chan[0]).await.unwrap(),
-                            adc.read(&mut chan[0]).await.unwrap()];
+                            adc.read(&mut chan[1]).await.unwrap(),
+                            adc.read(&mut chan[2]).await.unwrap(),
+                            adc.read(&mut chan[3]).await.unwrap()];
                 
                 result = SensorResult{
                             time: Instant::now(), 
@@ -290,9 +290,9 @@ pub mod yxz_lsm6_old {
 pub mod yxz_lsm6 {
     use super::*;
     use hal::peripherals::I2C0 as I2C;
-    use accelerometer::Accelerometer;
-    use lsm6dsox::{accelerometer::RawAccelerometer, *};
+    use lsm6dsox::*;
     use Lsm6dsox as Lsm6;
+    use accelerometer::Accelerometer;
 
     /* control channels */
     pub static READY: AtomicBool = AtomicBool::new(false);
@@ -366,7 +366,8 @@ pub mod yxz_lsm6 {
             let i2c_hub = tca.split();
             let sen_1 = Lsm6::new(i2c_hub.i2c0, SlaveAddress::Low, time::Delay);
             let sen_2 = Lsm6::new(i2c_hub.i2c1, SlaveAddress::Low, time::Delay);
-            let mut sensory = [sen_1, sen_2];
+            let sen_3 = Lsm6::new(i2c_hub.i2c2, SlaveAddress::Low, time::Delay);
+            let mut sensory = [sen_1, sen_2, sen_3];
             sensory.iter_mut().for_each(|x|
                                 {   //x.setup().unwrap();
                                     let data_rate = DataRate::Freq6660Hz;
@@ -374,7 +375,7 @@ pub mod yxz_lsm6 {
                                     x.set_gyro_sample_rate(data_rate).unwrap();
                                     //x.accel_raw().unwrap();
                                 });
-            DISP.signal([None, None, None, Some("LSM6 Sensory".try_into().unwrap())]);
+            DISP.signal([None, None, None, Some("LSM6x3".try_into().unwrap())]);
             let mut ticker 
                     = Ticker::every(Duration::from_hz(hz));
             let mut reading: Reading;
@@ -415,7 +416,7 @@ pub mod yxz_lsm6 {
 
 
 
-    use hal::bind_interrupts;
+    //use hal::bind_interrupts;
     type SharedI2C = Mutex<RawMutex, Option<I2C>>;
     
     #[embassy_executor::task(pool_size = 3)]
