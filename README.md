@@ -39,11 +39,11 @@ If all went well, the boot drive will disappear and the Pico starts the new firm
 
 ## Available firmware binaries
 
-**YLab DG** is the basic version, reading the four built in ADCs (bank 0). [Download](uf2/ylab_dg.uf2)
+**YLab DG** is the basic version, reading the four built in ADCs (bank 0). [Download](https://github.com/schmettow/ylab-edge-go/raw/main/uf2/ylab_dg.uf2)
 
-**YLab Motion** uses a TCA9548 I2C bridge on Grove port 1 (Pins 0/1) with three TSM6DS33 motion sensors attached (bank 1). It also puts out built-in ADC (bank 0) [Download](uf2/ylab_motion.uf2)
+**YLab Motion** uses a TCA9548 I2C bridge on Grove port 1 (Pins 0/1) with three TSM6DS33 motion sensors attached (bank 1). It also puts out built-in ADC (bank 0) [Download](https://github.com/schmettow/ylab-edge-go/raw/main/uf2/ylab_motion.uf2)
 
-**YLab Stress** runs a Scd40 CO2/temp/humidity sensor on Grove 5 (Pins 8/9)[Download](uf2/ylab_stress.uf2)
+**YLab Stress** runs a Scd40 CO2/temp/humidity sensor on Grove 5 (Pins 8/9)[Download](https://github.com/schmettow/ylab-edge-go/raw/main/uf2/ylab_stress.uf2)
 
 
 ## Installing from source
