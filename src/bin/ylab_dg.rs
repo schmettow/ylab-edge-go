@@ -4,8 +4,9 @@
 /// CONFIGURATION
 /// 
 /// Adc Lsm6 Lsm6 Bmi 
-static DEV: (bool, bool, bool, bool, bool) = (false, false, true, false, false);
-static HZ: (u64, u64, u64, u64, u64) = (1, 97, 217, 5, 1);
+static DEV: (bool, bool, bool, bool, bool) = (true, false, false, false, false);
+static HZ: (u64, u64, u64, u64, u64) = (500, 97, 217, 5, 1);
+static RUN_DISP: bool = false;
 
 use ylab::{ysns::{yco2, yirt_max}, yuio::disp::TEXT as DISP};
 use {defmt_rtt as _, panic_probe as _};
@@ -167,32 +168,11 @@ fn init() -> ! {
                         unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::task(i2c, HZ.1)));
                     },
                 (_,false, true, false, false) 
-                =>  {   // LSM on Grove 3 in shared peripherals mode
-                        /*let i2c 
-                            = i2c::I2c::new_async(i2c_contr, p.PIN_5, p.PIN_4,
-                                            Irqs,
-                                            i2c::Config::default());*/
-                        DISP.signal([None, Some("0-3-LSM".try_into().unwrap()), None,None]);
-                        unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::shared_task(i2c_contr, p.PIN_5, p.PIN_4, Irqs, HZ.2)));
-                        }
+                =>  {},
                 (_,false, false, true, false) 
-                =>  {   // BMI on Grove 5
-                        let i2c 
-                            = i2c::I2c::new_async(i2c_contr, p.PIN_9, p.PIN_8,
-                                        Irqs,
-                                        i2c::Config::default());
-                        DISP.signal([None, Some("0-3-BMI".try_into().unwrap()), None,None]);
-                        unwrap!(spawner.spawn(ylab::ysns::yxz_bmi160::task(i2c, HZ.3)));  
-                        }
+                =>  {}
                 (_,false, false, false, true) 
-                =>  {   // CO2 on Grove 5
-                        let i2c 
-                            = i2c::I2c::new_async(i2c_contr, p.PIN_9, p.PIN_8,
-                                        Irqs,
-                                        i2c::Config::default());
-                        DISP.signal([None, Some("0-5-CO2".try_into().unwrap()), None,None]);
-                        unwrap!(spawner.spawn(ylab::ysns::yco2::task(i2c)));  
-                    }
+                =>  {}
                 _ => {crate::todo!("shared I2C not yet implemented")}
             }
 
@@ -214,10 +194,12 @@ fn init() -> ! {
         unwrap!(spawner.spawn(yled::task(p.PIN_25.degrade())));
         // task for receiving text and put it on an OLED 1306
         // Display will use I2C1 on 
-        let i2c_contr = p.I2C1;
-        let i2c 
-            = i2c::I2c::new_async(i2c_contr, p.PIN_3, p.PIN_2, Irqs, Config::default());
-        unwrap!(spawner.spawn(ydsp::task(i2c)));
+        
+        if RUN_DISP {
+            let i2c_contr = p.I2C1;
+            let i2c 
+                = i2c::I2c::new_async(i2c_contr, p.PIN_3, p.PIN_2, Irqs, Config::default());
+            unwrap!(spawner.spawn(ydsp::task(i2c)));}
         // task for listening to button presses.
         unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
         // task listening for data packeges to send up the line (reverse USB ;)
