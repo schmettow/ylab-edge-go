@@ -1,9 +1,12 @@
+pub use crate::*;
+
 /* YLab transport formats  */
 pub mod bsu {
+    use super::*;
     /* USB Logging */
-    use embassy_rp::bind_interrupts;
-    use embassy_rp::peripherals::USB;
-    use embassy_rp::usb::{Driver, InterruptHandler};
+    use hal::bind_interrupts;
+    use hal::peripherals::USB;
+    use hal::usb::{Driver, InterruptHandler};
     use log::LevelFilter;
     use embassy_usb_logger;
 
@@ -18,7 +21,7 @@ pub mod bsu {
         let driver = 
             Driver::new(usb, Irqs);
         // This is copied from the crate. The run! macro is using set_max_level, where the racy version is needed.
-        static LOGGER: embassy_usb_logger::UsbLogger<1024> = 
+        static LOGGER: embassy_usb_logger::UsbLogger<2048> = 
             embassy_usb_logger::UsbLogger::new();
         unsafe {
             let _ = log::set_logger_racy(&LOGGER)

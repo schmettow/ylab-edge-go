@@ -3,37 +3,16 @@
 
 /// CONFIGURATION
 /// 
-/// Adc Lsm6 Lsm6 Bmi 
-static DEV: (bool, bool, bool, bool, bool) = (true, false, false, false, false);
-static HZ: (u64, u64, u64, u64, u64) = (500, 97, 217, 5, 1);
+/// Adc Tcm
+static DEV: (bool, bool) = (false, true);
+static HZ: (u64, u64) = (1, 400);
+static SPEED: u32 = 300_000;
 static RUN_DISP: bool = false;
 
 use ylab::{ysns::{yco2, yirt_max}, yuio::disp::TEXT as DISP};
 use {defmt_rtt as _, panic_probe as _};
 
-/// # YLab Edge Go
-/// 
-/// __YLab Edge Go__ is a sensor recording firmware for the Cytron Maker Pi Pico
-/// board. It uses Grove connectors for a variety of sensor modules. 
-/// 
-/// The system runs on both cores of the RP2040. 
-/// It use a concurrent, cooperative multi-actor system,
-/// with one task per sensor or ui element. 
-/// The control flow is kept in a separate task, which receives and sends 
-/// messages to the other actors.
-/// 
-/// 
-/// ## Dependencies
-/// 
-/// YLab Edge makes use of the Embassy framework, in particular:
-/// 
-/// + multi-core
-/// + async routines
-/// + Timing
-/// + concurrency-safe data containers
-/// 
-/// For running multicore, we need Executor (not just spawner) 
-/// and deformat macros (!unwrap)
+
 use embassy_executor::Executor;
 #[allow(unused_imports)]
 use hal::adc::{Async, Blocking};
@@ -55,74 +34,17 @@ static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 use hal::gpio::Pin;
 use ylab::ysns::yxz_bmi160;
 use ylab::ysns::yxz_lsm6;
-/// + thread-safe data transfer and control
-///
-/// Furthermore, YLab Edge brings its own high-level modules
-/// for rapidly developing interactive data collection devices.
-/// 
-/// + YUI input (LED) and output (button)
 use ylab::yuio::led as yled;
 use ylab::yuio::disp as ydsp;
 use ylab::yuii::btn as ybtn;
-/// + four built-in ADC sensors
 use ylab::ysns::adc as yadc;
-/// + four ADCs on a ADS1115;
-// use ylab::ysns::ads1015_conti as yads0;
-// use ylab::ysns::ads1115 as yads1;
-/// + accel sensor
-// use ylab::ysns::yxz_bmi160;
-/// + IR tempereture
-// use ylab::ysns::yirt;
-/// + data transport/storage
 use ylab::ytfk::bsu as ybsu;
-
-/// ## Storage task
-/// 
-/// The storage task currently employs the usb-logger module of Embassy.
-
-/// ## UI task
-/// 
-/// The ui task collects events, e.g. button presses, 
-/// updates the output (LED, display) and controls the
-/// recording task using an atomic lock.
-/// 
-/// The ui orchestrates the input/output, sensors and storage 
-/// using a state machine. 
-/// The allowed states are defines by the enum AppState
-/// Down the line we have to make copies of the AppState. This is why 
-/// a couple of traits need to be derived for AppState.
 
 #[derive(Debug,  // used as fmt
     Clone, Copy, // because next_state 
     PartialEq, Eq, )] // testing equality
 enum AppState {New, Ready, Record}
 
-/// In a usual multi-threaded app you would write the interaction model
-/// in the main task. However, with dual-core the main task is no longer 
-/// async. Since all communication channels are static, this really doesn't matter.
-/// 
-/// The initial state is set and a signal is send to the LED.
-/// The event loop waits for button events (long or short press) 
-/// and changes the states, accordingly.
-/// If an actual state change has occured, the state is signaled to the UI 
-/// and initialized if that is necessary. In this case, entering Record 
-/// starts the sensor sampling.
-/// 
-/// From an architectural point of view, this is a nice setup, too. 
-/// Basically, we are separating the very different tasks of 
-/// peripherals/spawning and ui handling. It would be easy to just plugin a 
-/// different ui, by just reqriting this task. For example, another ui
-/// could use the RGB led to signal states, or collect commands from a serial console.
-///
-/// Conclusion so far: If we take the Embassy promise for granted, that async is zero-cost, 
-/// the separation of functionality into different tasks reduces dependencies. It introduces 
-/// the complexity of concurreny-safe signalling.
-///
-/// ## Init
-/// 
-/// + Initializing peripherals 
-/// + spawning tasks
-/// + assigning periphs to tasks
 
 use ylab::hal;
 use hal::i2c::{self, Config};
@@ -135,58 +57,37 @@ bind_interrupts!(struct Irqs {
     ADC_IRQ_FIFO => adc::InterruptHandler;
 });
 
-/// Because the program runs on two cores,
-/// the `init` function is the entry point, not `main`.
+
 
 #[cortex_m_rt::entry]
 fn init() -> ! {
-    // Getting hold of the peripherals, 
-    // like pins, ADC, and I2C controllers.
     let p = hal::init(Default::default());
-    // Spawning a process on the second core
     spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
-        // The second core has its own executor, which is 
-        // is the Embassy mechanism to handle concurrency.
         let executor1 
             = EXECUTOR1.init(Executor::new());
-        // Here we start spawning our actors as separate tasks. 
-        // The DEV vector simply is a static register 
-        // to easily switch on and off components at dev time.
 
         executor1.run(|spawner|{
           
             let i2c_contr  = p.I2C0;
             match DEV {
-                (_,true, false, false, false) 
+                (_,true)
                 =>  {   // LSM on Grove 1
+                        let mut config = Config::default();
+                        config.frequency = SPEED.into();
                         let i2c 
                         = i2c::I2c::new_async(i2c_contr, p.PIN_1, p.PIN_0,
                                         Irqs,
-                                        i2c::Config::default());
-                        
+                                        config);
                         DISP.signal([None, Some("0-1-LSM".try_into().unwrap()), None,None]);
-                        unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::task(i2c, HZ.1)));
+                        unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::multi_task(i2c, HZ.1, false)));
                     },
-                (_,false, true, false, false) 
-                =>  {},
-                (_,false, false, true, false) 
+                (_,_)
                 =>  {}
-                (_,false, false, false, true) 
-                =>  {}
-                _ => {crate::todo!("shared I2C not yet implemented")}
             }
-
-            
         })
     });
 
 
-    // Initializing the Embassy executor on the first core.
-    // Starting all tasks that are respnsible for:
-    // + ui events
-    // + control flow
-    // + sending data
-    
 
     let executor0 = EXECUTOR0.init(Executor::new());
     executor0.run(|spawner| {   
@@ -194,7 +95,6 @@ fn init() -> ! {
         unwrap!(spawner.spawn(yled::task(p.PIN_25.degrade())));
         // task for receiving text and put it on an OLED 1306
         // Display will use I2C1 on 
-        
         if RUN_DISP {
             let i2c_contr = p.I2C1;
             let i2c 
@@ -206,7 +106,7 @@ fn init() -> ! {
         unwrap!(spawner.spawn(ybsu::task(p.USB)));
         // task to control sensors, storage and ui
         unwrap!(spawner.spawn(control_task()));
-        if DEV.0{
+        if DEV.0 {
             let adc0: adc::Adc<'_, Async> 
                 = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
             unwrap!(spawner.spawn(
@@ -217,19 +117,7 @@ fn init() -> ! {
     });
 }
 
-/// ## Control task
-/// 
-/// + capturing user input
-/// + controlling user output
-/// + controlling storage
-/// + put text on a display
-/// 
-/// 
-/// 
 
-/// To be parallel-safe, we are using boolean atomics.
-/// Atomics are capsules around basic data types that 
-/// efficiently handle concurrent or parallel access.
 pub use core::sync::atomic::Ordering;
 static RLX: Ordering = Ordering::Relaxed;
 
@@ -238,11 +126,6 @@ async fn control_task() {
     let mut state = AppState::Record;
     yadc::RECORD.store(true, RLX);
     yxz_lsm6::RECORD.store(true, RLX);
-    yxz_bmi160::RECORD.store(true, RLX);
-    yco2::RECORD.store(true, RLX);
-    yirt_max::RECORD.store(true, RLX);
-    //yads0::RECORD.store(true, RLX);
-    //yads1::RECORD.store(true, RLX);
     
     yled::LED.signal(yled::State::Steady);
     loop {

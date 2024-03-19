@@ -3,11 +3,12 @@
 
 /// CONFIGURATION
 /// 
-/// Adc Lsm6 Lsm6 Bmi 
-static DEV: (bool, bool, bool, bool, bool) = (true, false, false, false, false);
-static HZ: (u64, u64, u64, u64, u64) = (500, 97, 217, 5, 1);
-static RUN_DISP: bool = false;
+/// Adc Lsm6 Lsm6 Bmi CO2
+static DEV: (bool, bool, bool, bool, bool) = (false, false, true, false, false);
+static HZ: (u64, u64, u64, u64, u64) = (1, 7, 6, 5, 1);
 
+
+use embassy_futures::block_on;
 use ylab::{ysns::{yco2, yirt_max}, yuio::disp::TEXT as DISP};
 use {defmt_rtt as _, panic_probe as _};
 
@@ -37,6 +38,7 @@ use {defmt_rtt as _, panic_probe as _};
 use embassy_executor::Executor;
 #[allow(unused_imports)]
 use hal::adc::{Async, Blocking};
+
 use hal::multicore::{spawn_core1, Stack};
 use defmt::*;
 
@@ -126,58 +128,70 @@ enum AppState {New, Ready, Record}
 
 use ylab::hal;
 use hal::i2c::{self, Config};
-use hal::peripherals::{I2C0, I2C1};
+use hal::peripherals::{I2C0, I2C1, PIN_0, PIN_1, PIN_4, PIN_5};
 use hal::adc;
 use hal::bind_interrupts;
 bind_interrupts!(struct Irqs {
-    I2C0_IRQ => i2c::InterruptHandler<I2C0>;
+    //I2C0_IRQ => i2c::InterruptHandler<I2C0>;
     I2C1_IRQ => i2c::InterruptHandler<I2C1>;
     ADC_IRQ_FIFO => adc::InterruptHandler;
 });
 
+
+
+use ylab::*;
+
+
+/// Set up I2C bus
+///
+/// Make a connection between I2C controller and two wires.
+///
+/// Opposed to a *controller* a *bus* is the connection of a controller with a pair of pins.
+/// For this to work with multiple sensors in separate tasks, we use Mutexes throughout.
+/// 
+/// These Mutexes carry the peripheral as an Option. This is the only way to make them static,
+/// which is a concurrency requirement for handing peripherals down to parallel tasks.
+/// 
+
+pub enum I2C0Grove {
+    One(PIN_1, PIN_0),
+    Three(PIN_5, PIN_4),
+}
+
+type SharedI2C = Mutex<RawMutex, Option<I2C0>>;
+static I2C: SharedI2C = Mutex::new(None);
+static SCL_1: Mutex<RawMutex, Option<PIN_1>> = Mutex::new(None);
+static SDA_1: Mutex<RawMutex, Option<PIN_0>> = Mutex::new(None);
+
+async fn i2c_bus(i2c: I2C0, scl_1: PIN_1, sda_1: PIN_0)
+{
+    //DISP.signal([None, Some("0-3-LSM".try_into().unwrap()), None,None]);
+    //DISP.signal([ Some("LSM now".try_into().unwrap()), None, None, None]);
+    *(I2C.lock().await) = Some(i2c);
+    *(SCL_1.lock().await) = Some(scl_1);
+    *(SDA_1.lock().await) = Some(sda_1);
+    //DISP.signal([ Some("LSM conf".try_into().unwrap()), None, None, None]);
+}
+
+/// Init
 /// Because the program runs on two cores,
 /// the `init` function is the entry point, not `main`.
-
 #[cortex_m_rt::entry]
 fn init() -> ! {
-    // Getting hold of the peripherals, 
-    // like pins, ADC, and I2C controllers.
     let p = hal::init(Default::default());
-    // Spawning a process on the second core
     spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
-        // The second core has its own executor, which is 
-        // is the Embassy mechanism to handle concurrency.
         let executor1 
             = EXECUTOR1.init(Executor::new());
-        // Here we start spawning our actors as separate tasks. 
-        // The DEV vector simply is a static register 
-        // to easily switch on and off components at dev time.
-
         executor1.run(|spawner|{
-          
-            let i2c_contr  = p.I2C0;
-            match DEV {
-                (_,true, false, false, false) 
-                =>  {   // LSM on Grove 1
-                        let i2c 
-                        = i2c::I2c::new_async(i2c_contr, p.PIN_1, p.PIN_0,
-                                        Irqs,
-                                        i2c::Config::default());
-                        
-                        DISP.signal([None, Some("0-1-LSM".try_into().unwrap()), None,None]);
-                        unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::task(i2c, HZ.1)));
-                    },
-                (_,false, true, false, false) 
-                =>  {},
-                (_,false, false, true, false) 
-                =>  {}
-                (_,false, false, false, true) 
-                =>  {}
-                _ => {crate::todo!("shared I2C not yet implemented")}
-            }
+            let _ = block_on(i2c_bus(p.I2C0, p.PIN_1, p.PIN_0));
 
-            
-        })
+            unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::sharing_task(
+                &I2C, 
+                &SCL_1,
+                &SDA_1,
+                HZ.2
+            )));
+        });
     });
 
 
@@ -194,12 +208,10 @@ fn init() -> ! {
         unwrap!(spawner.spawn(yled::task(p.PIN_25.degrade())));
         // task for receiving text and put it on an OLED 1306
         // Display will use I2C1 on 
-        
-        if RUN_DISP {
-            let i2c_contr = p.I2C1;
-            let i2c 
-                = i2c::I2c::new_async(i2c_contr, p.PIN_3, p.PIN_2, Irqs, Config::default());
-            unwrap!(spawner.spawn(ydsp::task(i2c)));}
+        let i2c_contr = p.I2C1;
+        let i2c 
+            = i2c::I2c::new_async(i2c_contr, p.PIN_3, p.PIN_2, Irqs, Config::default());
+        unwrap!(spawner.spawn(ydsp::task(i2c)));
         // task for listening to button presses.
         unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
         // task listening for data packeges to send up the line (reverse USB ;)
