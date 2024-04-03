@@ -4,8 +4,8 @@
 /// CONFIGURATION
 /// 
 /// Adc Tcm
-static DEV: (bool, bool) = (true, true);
-static HZ: (u64, u64) = (200, 1);
+static DEV: (bool, bool, bool) = (true, true, true);
+static HZ: (u64, u64, u64) = (0, 211, 0);
 static SPEED: u32 = 100_000;
 static RUN_DISP: bool = false;
 use {defmt_rtt as _, panic_probe as _};
@@ -23,22 +23,23 @@ static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 /// + timing using Embassy time 
 // use embassy_time::{Duration, Ticker};
 /// + peripherals
-use hal::gpio::Pin;
-use ylab::yuio::led as yled;
-use ylab::yuio::disp as ydsp;
+use ylab::*;
+use ysns::moi;
+use yuio::led as yled;
+use yuio::disp as ydsp;
 use ydsp::TEXT as DISP;
-use ylab::yuii::btn as ybtn;
-use ylab::ysns::adc as yadc;
-use ylab::ysns::yco2;
-use ylab::ytfk::bsu as ybsu;
+use yuii::btn as ybtn;
+use ysns::adc as yadc;
+use ysns::yco2;
+use ytfk::bsu as ybsu;
 
 #[derive(Debug,  // used as fmt
     Clone, Copy, // because next_state 
     PartialEq, Eq, )] // testing equality
 enum AppState {New, Ready, Record}
 
-
 use ylab::hal;
+use hal::gpio::Pin;
 use hal::i2c::{self, Config};
 use hal::peripherals::{I2C0, I2C1};
 use hal::adc;
@@ -66,22 +67,15 @@ fn init() -> ! {
 
         executor1.run(|spawner|{   
             let i2c_contr  = p.I2C0;
-            match DEV {
-                (_, true) 
-                =>  {   // CO2 on Grove 5
-                        let mut config = Config::default();
+            if DEV.2 {
+                let mut config = Config::default();
                         config.frequency = SPEED.into();
                         let i2c 
                             = i2c::I2c::new_async(i2c_contr, p.PIN_9, p.PIN_8,
                                         Irqs,
                                         config);
-                        DISP.signal([None, Some("0-5-CO2".try_into().unwrap()), None,None]);
-                        unwrap!(spawner.spawn(ylab::ysns::yco2::task(i2c)));
-                    },
-                (_, _) =>  {},
-                }
-
-            
+                        unwrap!(spawner.spawn(ylab::ysns::yco2::task(i2c, 2)));
+            }
         })
     });
 
@@ -105,12 +99,17 @@ fn init() -> ! {
         // task to control sensors, storage and ui
         unwrap!(spawner.spawn(control_task()));
         if DEV.0{
-            let adc0: adc::Adc<'_, Async> 
-                = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
-            unwrap!(spawner.spawn(
-                yadc::task( adc0, 
-                            p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29,
-                            HZ.0)));
+            if DEV.0 {
+                spawner.spawn(ylab::ysns::moi::task_2(p.PIN_6, p.PIN_7, 0)).unwrap()
+            }
+            if DEV.1 {
+                let adc0: adc::Adc<'_, Async> 
+                    = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
+                spawner.spawn(
+                    yadc::task( adc0, 
+                                p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29, 
+                                HZ.1, 1)).unwrap();
+            };
         };
     });
 }
@@ -122,6 +121,7 @@ static RLX: Ordering = Ordering::Relaxed;
 #[embassy_executor::task]
 async fn control_task() { 
     let mut state = AppState::Record;
+    moi::RECORD.store(true, RLX);
     yadc::RECORD.store(true, RLX);
     yco2::RECORD.store(true, RLX);
     
@@ -144,6 +144,7 @@ async fn control_task() {
                         AppState::New => {
                             // Reset all sensors and vibrate
                             yled::LED.signal(yled::State::Vibrate);
+                            moi::RECORD.store(false, RLX);
                             yadc::RECORD.store(false, RLX);
                             yco2::RECORD.store(false, RLX);
                             DISP.signal([ Some("New".try_into().unwrap()), None, None, None]);
@@ -151,12 +152,14 @@ async fn control_task() {
                         AppState::Ready     => {
                             // Pause all sensors and blink
                             yled::LED.signal(yled::State::Blink);
+                            moi::RECORD.store(false, RLX);
                             yadc::RECORD.store(false, RLX);
                             yco2::RECORD.store(false, RLX);
                             DISP.signal([ Some("Ready".try_into().unwrap()),None, None,None]);
                             },
                         AppState::Record    => {
                             // Transmit sensor data and light up
+                            moi::RECORD.store(true, RLX);
                             yled::LED.signal(yled::State::Steady);
                             yadc::RECORD.store(true, RLX);
                             yco2::RECORD.store(true, RLX);

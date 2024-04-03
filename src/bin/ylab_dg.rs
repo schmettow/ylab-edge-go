@@ -4,11 +4,9 @@
 /// CONFIGURATION
 /// 
 /// Adc Lsm6 Lsm6 Bmi 
-static DEV: (bool, bool, bool, bool, bool) = (true, false, false, false, false);
-static HZ: (u64, u64, u64, u64, u64) = (500, 97, 217, 5, 1);
-static RUN_DISP: bool = false;
+static DEV: (bool, bool) = (true, true);
+static HZ: (u64, u64) = (0, 419);
 
-use ylab::{ysns::{yco2, yirt_max}, yuio::disp::TEXT as DISP};
 use {defmt_rtt as _, panic_probe as _};
 
 /// # YLab Edge Go
@@ -53,8 +51,8 @@ static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 // use embassy_time::{Duration, Ticker};
 /// + peripherals
 use hal::gpio::Pin;
-use ylab::ysns::yxz_bmi160;
-use ylab::ysns::yxz_lsm6;
+use ylab::*;
+use ylab::ysns::moi;
 /// + thread-safe data transfer and control
 ///
 /// Furthermore, YLab Edge brings its own high-level modules
@@ -62,7 +60,6 @@ use ylab::ysns::yxz_lsm6;
 /// 
 /// + YUI input (LED) and output (button)
 use ylab::yuio::led as yled;
-use ylab::yuio::disp as ydsp;
 use ylab::yuii::btn as ybtn;
 /// + four built-in ADC sensors
 use ylab::ysns::adc as yadc;
@@ -125,13 +122,9 @@ enum AppState {New, Ready, Record}
 /// + assigning periphs to tasks
 
 use ylab::hal;
-use hal::i2c::{self, Config};
-use hal::peripherals::{I2C0, I2C1};
 use hal::adc;
 use hal::bind_interrupts;
 bind_interrupts!(struct Irqs {
-    I2C0_IRQ => i2c::InterruptHandler<I2C0>;
-    I2C1_IRQ => i2c::InterruptHandler<I2C1>;
     ADC_IRQ_FIFO => adc::InterruptHandler;
 });
 
@@ -154,31 +147,19 @@ fn init() -> ! {
         // to easily switch on and off components at dev time.
 
         executor1.run(|spawner|{
-          
-            let i2c_contr  = p.I2C0;
-            match DEV {
-                (_,true, false, false, false) 
-                =>  {   // LSM on Grove 1
-                        let i2c 
-                        = i2c::I2c::new_async(i2c_contr, p.PIN_1, p.PIN_0,
-                                        Irqs,
-                                        i2c::Config::default());
-                        
-                        DISP.signal([None, Some("0-1-LSM".try_into().unwrap()), None,None]);
-                        unwrap!(spawner.spawn(ylab::ysns::yxz_lsm6::task(i2c, HZ.1)));
-                    },
-                (_,false, true, false, false) 
-                =>  {},
-                (_,false, false, true, false) 
-                =>  {}
-                (_,false, false, false, true) 
-                =>  {}
-                _ => {crate::todo!("shared I2C not yet implemented")}
-            }
-
-            
-        })
-    });
+            if DEV.0 {
+                spawner.spawn(ylab::ysns::moi::task(p.PIN_6, p.PIN_7, p.PIN_8, p.PIN_9, 0)).unwrap()
+                }
+            if DEV.1 {
+                let adc0: adc::Adc<'_, Async> 
+                    = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
+                spawner.spawn(
+                    yadc::task( adc0, 
+                                p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29, 
+                                HZ.1, 1)).unwrap();
+                };
+            })
+        });
 
 
     // Initializing the Embassy executor on the first core.
@@ -192,28 +173,12 @@ fn init() -> ! {
     executor0.run(|spawner| {   
         // task for controlling the led
         unwrap!(spawner.spawn(yled::task(p.PIN_25.degrade())));
-        // task for receiving text and put it on an OLED 1306
-        // Display will use I2C1 on 
-        
-        if RUN_DISP {
-            let i2c_contr = p.I2C1;
-            let i2c 
-                = i2c::I2c::new_async(i2c_contr, p.PIN_3, p.PIN_2, Irqs, Config::default());
-            unwrap!(spawner.spawn(ydsp::task(i2c)));}
         // task for listening to button presses.
         unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
         // task listening for data packeges to send up the line (reverse USB ;)
         unwrap!(spawner.spawn(ybsu::task(p.USB)));
         // task to control sensors, storage and ui
-        unwrap!(spawner.spawn(control_task()));
-        if DEV.0{
-            let adc0: adc::Adc<'_, Async> 
-                = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
-            unwrap!(spawner.spawn(
-                yadc::task( adc0, 
-                            p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29, 
-                            HZ.0)));
-        };
+        unwrap!(spawner.spawn(control_task()))
     });
 }
 
@@ -230,19 +195,12 @@ fn init() -> ! {
 /// To be parallel-safe, we are using boolean atomics.
 /// Atomics are capsules around basic data types that 
 /// efficiently handle concurrent or parallel access.
-pub use core::sync::atomic::Ordering;
-static RLX: Ordering = Ordering::Relaxed;
 
 #[embassy_executor::task]
 async fn control_task() { 
     let mut state = AppState::Record;
+    moi::RECORD.store(true, RLX);
     yadc::RECORD.store(true, RLX);
-    yxz_lsm6::RECORD.store(true, RLX);
-    yxz_bmi160::RECORD.store(true, RLX);
-    yco2::RECORD.store(true, RLX);
-    yirt_max::RECORD.store(true, RLX);
-    //yads0::RECORD.store(true, RLX);
-    //yads1::RECORD.store(true, RLX);
     
     yled::LED.signal(yled::State::Steady);
     loop {
@@ -263,36 +221,20 @@ async fn control_task() {
                         AppState::New => {
                             // Reset all sensors and vibrate
                             yled::LED.signal(yled::State::Vibrate);
-                            yadc::RECORD.store(false, RLX);
-                            //yads0::RECORD.store(false, RLX);
-                            //yads1::RECORD.store(false, RLX);
-                            yxz_lsm6::RECORD.store(false, RLX);
-                            yxz_bmi160::RECORD.store(false, RLX);
-                            yirt_max::RECORD.store(false, RLX);
-                            DISP.signal([ Some("New".try_into().unwrap()), None, None, None]);
+                            moi::RECORD.store(false, RLX);
+                            yadc::RECORD.store(false, RLX);                        
                             },
                         AppState::Ready     => {
                             // Pause all sensors and blink
                             yled::LED.signal(yled::State::Blink);
-                            yadc::RECORD.store(false, RLX);
-                            //yads0::RECORD.store(false, RLX);
-                            //yads1::RECORD.store(false, RLX);
-                            yxz_lsm6::RECORD.store(false, RLX);
-                            yxz_bmi160::RECORD.store(false, RLX);
-                            yirt_max::RECORD.store(false, RLX);
-                            DISP.signal([ Some("Ready".try_into().unwrap()),None, None,None]);
+                            moi::RECORD.store(false, RLX);
+                            yadc::RECORD.store(false, RLX);                        
                             },
                         AppState::Record    => {
                             // Transmit sensor data and light up
                             yled::LED.signal(yled::State::Steady);
-                            yadc::RECORD.store(true, RLX);
-                            //yads0::RECORD.store(true, RLX);
-                            //yads1::RECORD.store(true, RLX);
-                            yxz_lsm6::RECORD.store(true, RLX);
-                            yxz_bmi160::RECORD.store(true, RLX);
-                            yco2::RECORD.store(true, RLX);
-                            yirt_max::RECORD.store(true, RLX);
-                            DISP.signal([ Some("Record".try_into().unwrap()),None, None,None]);
+                            moi::RECORD.store(true, RLX);
+                            yadc::RECORD.store(true, RLX);                        
                             }
                     }
                     state = next_state;
