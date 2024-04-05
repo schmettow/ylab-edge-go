@@ -415,10 +415,10 @@ pub mod yxz_lsm6 {
         sensor.set_gyro_sample_rate(DataRate::Freq416Hz).unwrap();
         sensor.set_gyro_scale(GyroscopeScale::Dps250).unwrap();
         DISP.signal([None, None, None, Some("Lsm6 set".try_into().unwrap())]);
-        let _ = sensor.accel_norm().unwrap() ;
+/*        let _ = sensor.accel_norm().unwrap() ;
         DISP.signal([None, None, None, Some("Lsm6 accel".try_into().unwrap())]);
 
-        let _ = sensor.angular_rate().unwrap();
+        let _ = sensor.angular_rate().unwrap(); */
         DISP.signal([None, None, None, Some("Lsm6 gyro".try_into().unwrap())]);
         let mut ticker 
                 = Ticker::every(Duration::from_hz(hz));
