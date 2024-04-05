@@ -8,7 +8,7 @@ pub mod bsu {
     use hal::peripherals::USB;
     use hal::usb::{Driver, InterruptHandler};
     use log::LevelFilter;
-    use embassy_usb_logger;
+    use embassy_usb_logger::*;
 
     /* The task of saving data from multiple sources has the exact same straucture
     as the logging task.*/
@@ -18,17 +18,17 @@ pub mod bsu {
             USBCTRL_IRQ => InterruptHandler<USB>;
         }); 
 
-        let driver = 
-            Driver::new(usb, Irqs);
+        let driver = Driver::new(usb, Irqs);
         // This is copied from the crate. The run! macro is using set_max_level, where the racy version is needed.
-        static LOGGER: embassy_usb_logger::UsbLogger<2048> = 
-            embassy_usb_logger::UsbLogger::new();
-        unsafe {
+        // static LOGGER: UsbLogger<4096> = UsbLogger::new();
+        run!(1024, LevelFilter::Info, driver);
+        /*unsafe {
             let _ = log::set_logger_racy(&LOGGER)
                     .map(|()| log::set_max_level_racy(LevelFilter::Info));
         };
         let _ = LOGGER.run(&mut embassy_usb_logger::LoggerState::new(), driver)
-                .await;
+                .await;*/
+        
         }
 
         
