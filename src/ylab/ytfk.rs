@@ -1,52 +1,58 @@
-pub use crate::*;
+pub use super::*;
+pub use core::fmt::Write;
 
-/* YLab transport formats  */
+//pub type Ytf = Sample<[Option<f32>; 8]>; // standard transport format
+type YtfLine = Vec<u8, 256>;
+
+trait YtfSend{
+    fn msg_csv(&self) -> Result<YtfLine, core::fmt::Error>;
+    fn msg_bin(&self) -> Result<YtfLine, core::fmt::Error>;
+}
+
+impl YtfSend for Ytf {
+    fn msg_csv(&self) -> Result<YtfLine, core::fmt::Error>{
+        let mut msg: YtfLine = Vec::new();
+        match core::write!(&mut msg, "{}", self) {
+            Ok(_) => return Ok(msg),
+            Err(e) => return Err(e)
+       }
+    }
+
+    fn msg_bin(&self) -> Result<YtfLine, core::fmt::Error>{
+        todo!()
+    }
+}
+
+
+
 pub mod bsu {
     use super::*;
-    /* USB Logging */
+    use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
     use hal::bind_interrupts;
     use hal::peripherals::USB;
     use hal::usb::{Driver, InterruptHandler};
     use log::LevelFilter;
     use embassy_usb_logger::*;
 
-    /* The task of saving data from multiple sources has the exact same straucture
-    as the logging task.*/
+    pub static SINK: Channel<RawMutex, Ytf, 3> = Channel::new();
+
     #[embassy_executor::task]
-    pub async fn task(usb: USB) {
+    pub async fn logger_task(usb: USB, level: LevelFilter) {
         bind_interrupts!(struct Irqs {
             USBCTRL_IRQ => InterruptHandler<USB>;
         }); 
-
         let driver = Driver::new(usb, Irqs);
-        // This is copied from the crate. The run! macro is using set_max_level, where the racy version is needed.
-        // static LOGGER: UsbLogger<4096> = UsbLogger::new();
-        run!(1024, LevelFilter::Info, driver);
-        /*unsafe {
-            let _ = log::set_logger_racy(&LOGGER)
-                    .map(|()| log::set_max_level_racy(LevelFilter::Info));
-        };
-        let _ = LOGGER.run(&mut embassy_usb_logger::LoggerState::new(), driver)
-                .await;*/
-        
-        }
+        run!(1024, level, driver);
+    }
 
-        
-        /* Main
-        use embassy_executor::Spawner;
-        use embassy_time::{Duration, Timer};
-        use {defmt_rtt as _, panic_probe as _};
-        #[embassy_executor::main]
-        async fn main(spawner: Spawner) {
-        let p = embassy_rp::init(Default::default());
-        spawner.spawn(task(p.USB)).unwrap();
-    
-        let mut counter = 0;
+    #[embassy_executor::task]
+    pub async fn task() {
         loop {
-            counter += 1;
-            log::info!("Tick {}", counter);
-            Timer::after(Duration::from_secs(1)).await;
+            let sample: Ytf = SINK.receive().await;
+            log::info!("{}", sample);
+            //time::Timer::after_nanos(500).await;
         }
-    } */
+    }
+
 }
 
