@@ -116,14 +116,14 @@ fn init() -> ! {
 
 
 pub use core::sync::atomic::Ordering;
-static RLX: Ordering = Ordering::Relaxed;
+static ORD: Ordering = ORD;
 
 #[embassy_executor::task]
 async fn control_task() { 
     let mut state = AppState::Record;
-    moi::RECORD.store(true, RLX);
-    yadc::RECORD.store(true, RLX);
-    yco2::RECORD.store(true, RLX);
+    moi::RECORD.store(true, ORD);
+    yadc::RECORD.store(true, ORD);
+    yco2::RECORD.store(true, ORD);
     
     yled::LED.signal(yled::State::Steady);
     loop {
@@ -144,25 +144,25 @@ async fn control_task() {
                         AppState::New => {
                             // Reset all sensors and vibrate
                             yled::LED.signal(yled::State::Vibrate);
-                            moi::RECORD.store(false, RLX);
-                            yadc::RECORD.store(false, RLX);
-                            yco2::RECORD.store(false, RLX);
+                            moi::RECORD.store(false, ORD);
+                            yadc::RECORD.store(false, ORD);
+                            yco2::RECORD.store(false, ORD);
                             DISP.signal([ Some("New".try_into().unwrap()), None, None, None]);
                             },
                         AppState::Ready     => {
                             // Pause all sensors and blink
                             yled::LED.signal(yled::State::Blink);
-                            moi::RECORD.store(false, RLX);
-                            yadc::RECORD.store(false, RLX);
-                            yco2::RECORD.store(false, RLX);
+                            moi::RECORD.store(false, ORD);
+                            yadc::RECORD.store(false, ORD);
+                            yco2::RECORD.store(false, ORD);
                             DISP.signal([ Some("Ready".try_into().unwrap()),None, None,None]);
                             },
                         AppState::Record    => {
                             // Transmit sensor data and light up
-                            moi::RECORD.store(true, RLX);
+                            moi::RECORD.store(true, ORD);
                             yled::LED.signal(yled::State::Steady);
-                            yadc::RECORD.store(true, RLX);
-                            yco2::RECORD.store(true, RLX);
+                            yadc::RECORD.store(true, ORD);
+                            yco2::RECORD.store(true, ORD);
                             DISP.signal([ Some("Record".try_into().unwrap()),None, None,None]);
                             }
                     }

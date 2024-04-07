@@ -199,8 +199,8 @@ fn init() -> ! {
 #[embassy_executor::task]
 async fn control_task() { 
     let mut state = AppState::Record;
-    moi::RECORD.store(true, RLX);
-    yadc::RECORD.store(true, RLX);
+    moi::RECORD.store(true, ORD);
+    yadc::RECORD.store(true, ORD);
     
     yled::LED.signal(yled::State::Steady);
     loop {
@@ -221,20 +221,20 @@ async fn control_task() {
                         AppState::New => {
                             // Reset all sensors and vibrate
                             yled::LED.signal(yled::State::Vibrate);
-                            moi::RECORD.store(false, RLX);
-                            yadc::RECORD.store(false, RLX);                        
+                            moi::RECORD.store(false, ORD);
+                            yadc::RECORD.store(false, ORD);                        
                             },
                         AppState::Ready     => {
                             // Pause all sensors and blink
                             yled::LED.signal(yled::State::Blink);
-                            moi::RECORD.store(false, RLX);
-                            yadc::RECORD.store(false, RLX);                        
+                            moi::RECORD.store(false, ORD);
+                            yadc::RECORD.store(false, ORD);                        
                             },
                         AppState::Record    => {
                             // Transmit sensor data and light up
                             yled::LED.signal(yled::State::Steady);
-                            moi::RECORD.store(true, RLX);
-                            yadc::RECORD.store(true, RLX);                        
+                            moi::RECORD.store(true, ORD);
+                            yadc::RECORD.store(true, ORD);                        
                             }
                     }
                     state = next_state;
