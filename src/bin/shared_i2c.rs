@@ -243,18 +243,18 @@ fn init() -> ! {
 /// Atomics are capsules around basic data types that 
 /// efficiently handle concurrent or parallel access.
 pub use core::sync::atomic::Ordering;
-static RLX: Ordering = Ordering::Relaxed;
+static ORD: Ordering = ORD;
 
 #[embassy_executor::task]
 async fn control_task() { 
     let mut state = AppState::Record;
-    yadc::RECORD.store(true, RLX);
-    yxz_lsm6::RECORD.store(true, RLX);
-    yxz_bmi160::RECORD.store(true, RLX);
-    yco2::RECORD.store(true, RLX);
-    yirt_max::RECORD.store(true, RLX);
-    //yads0::RECORD.store(true, RLX);
-    //yads1::RECORD.store(true, RLX);
+    yadc::RECORD.store(true, ORD);
+    yxz_lsm6::RECORD.store(true, ORD);
+    yxz_bmi160::RECORD.store(true, ORD);
+    yco2::RECORD.store(true, ORD);
+    yirt_max::RECORD.store(true, ORD);
+    //yads0::RECORD.store(true, ORD);
+    //yads1::RECORD.store(true, ORD);
     
     yled::LED.signal(yled::State::Steady);
     loop {
@@ -275,35 +275,35 @@ async fn control_task() {
                         AppState::New => {
                             // Reset all sensors and vibrate
                             yled::LED.signal(yled::State::Vibrate);
-                            yadc::RECORD.store(false, RLX);
-                            //yads0::RECORD.store(false, RLX);
-                            //yads1::RECORD.store(false, RLX);
-                            yxz_lsm6::RECORD.store(false, RLX);
-                            yxz_bmi160::RECORD.store(false, RLX);
-                            yirt_max::RECORD.store(false, RLX);
+                            yadc::RECORD.store(false, ORD);
+                            //yads0::RECORD.store(false, ORD);
+                            //yads1::RECORD.store(false, ORD);
+                            yxz_lsm6::RECORD.store(false, ORD);
+                            yxz_bmi160::RECORD.store(false, ORD);
+                            yirt_max::RECORD.store(false, ORD);
                             DISP.signal([ Some("New".try_into().unwrap()), None, None, None]);
                             },
                         AppState::Ready     => {
                             // Pause all sensors and blink
                             yled::LED.signal(yled::State::Blink);
-                            yadc::RECORD.store(false, RLX);
-                            //yads0::RECORD.store(false, RLX);
-                            //yads1::RECORD.store(false, RLX);
-                            yxz_lsm6::RECORD.store(false, RLX);
-                            yxz_bmi160::RECORD.store(false, RLX);
-                            yirt_max::RECORD.store(false, RLX);
+                            yadc::RECORD.store(false, ORD);
+                            //yads0::RECORD.store(false, ORD);
+                            //yads1::RECORD.store(false, ORD);
+                            yxz_lsm6::RECORD.store(false, ORD);
+                            yxz_bmi160::RECORD.store(false, ORD);
+                            yirt_max::RECORD.store(false, ORD);
                             DISP.signal([ Some("Ready".try_into().unwrap()),None, None,None]);
                             },
                         AppState::Record    => {
                             // Transmit sensor data and light up
                             yled::LED.signal(yled::State::Steady);
-                            yadc::RECORD.store(true, RLX);
-                            //yads0::RECORD.store(true, RLX);
-                            //yads1::RECORD.store(true, RLX);
-                            yxz_lsm6::RECORD.store(true, RLX);
-                            yxz_bmi160::RECORD.store(true, RLX);
-                            yco2::RECORD.store(true, RLX);
-                            yirt_max::RECORD.store(true, RLX);
+                            yadc::RECORD.store(true, ORD);
+                            //yads0::RECORD.store(true, ORD);
+                            //yads1::RECORD.store(true, ORD);
+                            yxz_lsm6::RECORD.store(true, ORD);
+                            yxz_bmi160::RECORD.store(true, ORD);
+                            yco2::RECORD.store(true, ORD);
+                            yirt_max::RECORD.store(true, ORD);
                             DISP.signal([ Some("Record".try_into().unwrap()),None, None,None]);
                             }
                     }
