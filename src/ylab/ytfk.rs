@@ -27,7 +27,6 @@ impl YtfSend for Ytf {
 
 pub mod bsu {
     use super::*;
-    use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
     use hal::bind_interrupts;
     use hal::peripherals::USB;
     use hal::usb::{Driver, InterruptHandler};

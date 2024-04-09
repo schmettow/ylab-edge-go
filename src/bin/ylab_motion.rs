@@ -8,6 +8,7 @@ static DEV: (bool, bool, bool, bool) = (true, true, true, false);
 static HZ: (u64, u64, u64, u64) = (0, 103, 113, 0);
 static SPEED: u32 = 100_000;
 const LOG_LEVEL: log::LevelFilter = log::LevelFilter::Info;
+const MULTI: bool = true;
 use {defmt_rtt as _, panic_probe as _};
 
 
@@ -75,21 +76,16 @@ fn init() -> ! {
                 let i2c 
                 = i2c::I2c::new_async(i2c0, p.PIN_1, p.PIN_0,
                                         Irqs, config);
-                spawner.spawn(ylab::ysns::yxz_lsm6::task(i2c, HZ.2, 2)).unwrap();
+                if MULTI {
+                    let n: u64 = 3;
+                    spawner.spawn(ylab::ysns::yxz_lsm6::multi_task(i2c, n as u8, HZ.2/n, false, 2)).unwrap();
+                } else {
+                    spawner.spawn(ylab::ysns::yxz_lsm6::task(i2c, HZ.2, 2)).unwrap();
+                }
+                    
+                
             }
 
-            /*let i2c1  = p.I2C1;
-            if DEV.3 {
-                // BSM on 
-                let mut config = Config::default();
-                config.frequency = SPEED.into();
-                let i2c 
-                    = i2c::I2c::new_async(i2c1, p.PIN_3, p.PIN_2,
-                                        Irqs, config);
-                spawner.spawn(
-                    ylab::ysns::yxz_bmi160::task(i2c, HZ.2, 3)
-                ).unwrap();
-            }*/
         })
     });
 

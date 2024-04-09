@@ -462,10 +462,10 @@ pub mod yxz_lsm6 {
             let sen_5 = Lsm6::new(hub.i2c5, SlaveAddress::Low, time::Delay);
             let sen_6 = Lsm6::new(hub.i2c6, SlaveAddress::Low, time::Delay);
             let sen_7 = Lsm6::new(hub.i2c7, SlaveAddress::Low, time::Delay);
-            let mut sensory = [sen_0, sen_1, sen_2, sen_3, sen_4, sen_5, sen_6, sen_7];
+            let mut sensors = [sen_0, sen_1, sen_2, sen_3, sen_4, sen_5, sen_6, sen_7];
             //let mut sensory = [Some(sen_0), Some(sen_1), Some(sen_2), Some(sen_3), Some(sen_4), Some(sen_5), Some(sen_6), Some(sen_7)];
             let data_rate = DataRate::Freq6660Hz;
-            for (s, sens) in sensory.as_mut().into_iter().enumerate() {
+            for (s, sens) in sensors.as_mut().into_iter().enumerate() {
                 if s >= n as usize {continue}
                 else {  sens.set_accel_sample_rate(data_rate).unwrap();
                         sens.set_gyro_sample_rate(data_rate).unwrap();};
@@ -478,7 +478,7 @@ pub mod yxz_lsm6 {
             READY.store(true, ORD);
             loop {
                 if RECORD.load(ORD){
-                    for (s, sensor) in sensory.as_mut().into_iter().enumerate() {
+                    for (s, sensor) in sensors.as_mut().into_iter().enumerate() {
                         if s >= n as usize {continue}
                         let accel = sensor.accel_norm().unwrap();
                         let gyro = sensor.angular_rate().unwrap();
@@ -486,7 +486,7 @@ pub mod yxz_lsm6 {
                                 gyro.x.as_hertz() as f32, 
                                 gyro.y.as_hertz() as f32, 
                                 gyro.z.as_hertz() as f32];
-                        let sample = Sample{sensory: s as u8, time: Instant::now(), read: reading};
+                        let sample = Sample{sensory: (s as u8 + sensory), time: Instant::now(), read: reading};
                         SINK.send(sample.into()).await;
                         /*log::info!("{},{},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},,", 
                             result.time.as_micros(),
