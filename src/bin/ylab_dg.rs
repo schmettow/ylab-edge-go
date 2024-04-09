@@ -98,23 +98,6 @@ enum AppState {New, Ready, Record}
 /// in the main task. However, with dual-core the main task is no longer 
 /// async. Since all communication channels are static, this really doesn't matter.
 /// 
-/// The initial state is set and a signal is send to the LED.
-/// The event loop waits for button events (long or short press) 
-/// and changes the states, accordingly.
-/// If an actual state change has occured, the state is signaled to the UI 
-/// and initialized if that is necessary. In this case, entering Record 
-/// starts the sensor sampling.
-/// 
-/// From an architectural point of view, this is a nice setup, too. 
-/// Basically, we are separating the very different tasks of 
-/// peripherals/spawning and ui handling. It would be easy to just plugin a 
-/// different ui, by just reqriting this task. For example, another ui
-/// could use the RGB led to signal states, or collect commands from a serial console.
-///
-/// Conclusion so far: If we take the Embassy promise for granted, that async is zero-cost, 
-/// the separation of functionality into different tasks reduces dependencies. It introduces 
-/// the complexity of concurreny-safe signalling.
-///
 /// ## Init
 /// 
 /// + Initializing peripherals 
@@ -148,7 +131,7 @@ fn init() -> ! {
 
         executor1.run(|spawner|{
             if DEV.0 {
-                spawner.spawn(ylab::ysns::moi::task(p.PIN_6, p.PIN_7, p.PIN_8, p.PIN_9, 0)).unwrap()
+                spawner.spawn(ylab::ysns::moi::task(p.PIN_21, p.PIN_22, p.PIN_8, p.PIN_9, 0)).unwrap()
                 }
             if DEV.1 {
                 let adc0: adc::Adc<'_, Async> 
@@ -176,7 +159,8 @@ fn init() -> ! {
         // task for listening to button presses.
         unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
         // task listening for data packeges to send up the line (reverse USB ;)
-        unwrap!(spawner.spawn(ybsu::task(p.USB)));
+        unwrap!(spawner.spawn(ybsu::logger_task(p.USB, log::LevelFilter::Info)));
+        unwrap!(spawner.spawn(ybsu::task()));
         // task to control sensors, storage and ui
         unwrap!(spawner.spawn(control_task()))
     });
