@@ -448,7 +448,8 @@ pub mod yxz_lsm6 {
         #[embassy_executor::task]
         pub async fn multi_task(i2c: i2c::I2c<'static, I2C, Mode>,
                                 n: u8,
-                                hz: u64, just_spin: bool) { 
+                                hz: u64, just_spin: bool,
+                                sensory: u8) { 
             DISP.signal([None, None, None, Some("Multi-Lsm6 task".try_into().unwrap())]);
             let tca = Xca9548a::new(i2c, SlaveAddr::default());
             DISP.signal([None, None, None, Some("TCA |==| I2C".try_into().unwrap())]);
@@ -469,14 +470,13 @@ pub mod yxz_lsm6 {
                 else {  sens.set_accel_sample_rate(data_rate).unwrap();
                         sens.set_gyro_sample_rate(data_rate).unwrap();};
             }
-            DISP.signal([None, None, None, Some("LSM6x3".try_into().unwrap())]);
+            //DISP.signal([None, None, None, Some("LSM6x3".try_into().unwrap())]);
             let mut ticker 
                     = Ticker::every(Duration::from_hz(hz));
             //let mut reading: Reading;
             //let mut result: Sample;
             READY.store(true, ORD);
             loop {
-                if !just_spin {ticker.next().await;};
                 if RECORD.load(ORD){
                     for (s, sensor) in sensory.as_mut().into_iter().enumerate() {
                         if s >= n as usize {continue}
@@ -499,6 +499,7 @@ pub mod yxz_lsm6 {
                             result.read[5],);*/
                         }
                     };
+                    if !just_spin {ticker.next().await;};
                 }
             }
     
