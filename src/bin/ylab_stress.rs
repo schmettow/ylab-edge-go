@@ -95,12 +95,13 @@ fn init() -> ! {
         // task for listening to button presses.
         unwrap!(spawner.spawn(ybtn::task(p.PIN_20.degrade())));
         // task listening for data packeges to send up the line (reverse USB ;)
-        unwrap!(spawner.spawn(ybsu::task(p.USB)));
+        unwrap!(spawner.spawn(ybsu::logger_task(p.USB, log::LevelFilter::Info)));
+        unwrap!(spawner.spawn(ybsu::task()));
         // task to control sensors, storage and ui
         unwrap!(spawner.spawn(control_task()));
         if DEV.0{
             if DEV.0 {
-                spawner.spawn(ylab::ysns::moi::task_2(p.PIN_6, p.PIN_7, 0)).unwrap()
+                spawner.spawn(ylab::ysns::moi::task_2(p.PIN_21, p.PIN_22, 0)).unwrap()
             }
             if DEV.1 {
                 let adc0: adc::Adc<'_, Async> 
@@ -113,10 +114,6 @@ fn init() -> ! {
         };
     });
 }
-
-
-pub use core::sync::atomic::Ordering;
-static ORD: Ordering = ORD;
 
 #[embassy_executor::task]
 async fn control_task() { 
