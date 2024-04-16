@@ -11,11 +11,7 @@ pub use embassy_sync::channel::Channel;
 
 pub use core::sync::atomic::Ordering;
 pub use core::sync::atomic::AtomicBool;
-//pub static RLX: Ordering = Ordering::Relaxed;
 pub static ORD: Ordering = Ordering::SeqCst;
-
-/*use core::fmt;
-use fmt::Write;*/
 
 
 pub mod ysns; // Ylab sensors

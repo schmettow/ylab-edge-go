@@ -8,7 +8,7 @@ static DEV: (bool, bool, bool, bool) = (true, true, true, false);
 static HZ: (u64, u64, u64, u64) = (0, 103, 113, 0);
 static SPEED: u32 = 100_000;
 const LOG_LEVEL: log::LevelFilter = log::LevelFilter::Info;
-const MULTI: bool = true;
+const N_PROBES: u8 = 4;
 use {defmt_rtt as _, panic_probe as _};
 
 
@@ -76,16 +76,12 @@ fn init() -> ! {
                 let i2c 
                 = i2c::I2c::new_async(i2c0, p.PIN_1, p.PIN_0,
                                         Irqs, config);
-                if MULTI {
-                    let n: u64 = 3;
-                    spawner.spawn(ylab::ysns::yxz_lsm6::multi_task(i2c, n as u8, HZ.2/n, false, 2)).unwrap();
-                } else {
-                    spawner.spawn(ylab::ysns::yxz_lsm6::task(i2c, HZ.2, 2)).unwrap();
+                match N_PROBES {
+                    0 => {},
+                    1 => spawner.spawn(ylab::ysns::yxz_lsm6::task(i2c, HZ.2, 2)).unwrap(),
+                    2..=8 => spawner.spawn(ylab::ysns::yxz_lsm6::multi_task(i2c, N_PROBES as u8, HZ.2/N_PROBES as u64, false, 2)).unwrap(),
+                    _ => return,}
                 }
-                    
-                
-            }
-
         })
     });
 
@@ -100,7 +96,7 @@ fn init() -> ! {
                 = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
             spawner.spawn(
                 yadc::task( adc0, 
-                            p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29, 
+                            p.PIN_26, p.PIN_27, p.PIN_28, 
                             HZ.1, 1)).unwrap();
         };
 

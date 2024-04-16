@@ -138,7 +138,7 @@ fn init() -> ! {
                     = adc::Adc::new( p.ADC, Irqs, adc::Config::default());
                 spawner.spawn(
                     yadc::task( adc0, 
-                                p.PIN_26, p.PIN_27, p.PIN_28, p.PIN_29, 
+                                p.PIN_26, p.PIN_27, p.PIN_28,  
                                 HZ.1, 1)).unwrap();
                 };
             })

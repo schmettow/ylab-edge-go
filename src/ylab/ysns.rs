@@ -10,58 +10,14 @@ pub struct SensorResult<R> {
 }
 
 
-pub mod fake {
-    use super::*;
-    /* data */
-    pub type Reading = [u16;4];
-    pub struct Result {
-        pub time: Instant,
-        pub reading: Reading
-    }
-    /* result channel */
-    pub static RESULT: Signal<RawMutex, Result> 
-    = Signal::new();
-    
-    /* control channel */
-    pub enum State {Ready, Record}
-    pub static CONTROL: Signal<RawMutex, State>  = Signal::new();
-    
-    #[embassy_executor::task]
-    pub async fn task(hz: u64) {
-        let mut ticker = Ticker::every(Duration::from_hz(hz));
-        loop {
-                let reading: Reading = [0,0,0,0];
-                let now: Instant = Instant::now();
-                let result = Result{time: now, reading: reading};
-                RESULT.signal(result);
-                ticker.next()
-                .await;
-                };
-            }
-        }
-
-
-
 pub mod moi {
     use super::*;
     use hal::peripherals::{PIN_21, PIN_22, PIN_8, PIN_9};
     use hal::gpio::{Input, Pull};
 
-    
     pub type Measure = bool;
     pub type Reading<const N: usize> = [Measure; N];
     pub type Sample<const N: usize> = crate::Sample<Measure, N>;
-    
-    pub struct Result<const N: usize> {
-        pub time: Instant,
-        pub reading: Reading<N>
-    }
-    
-    /* result channel */
-    //pub static RESULT: Signal<RawMutex, Sample>  = Signal::new();
-
-    /* trigger channel */
-    //pub static TRIGGER: Channel<RawMutex, Sample, 2> = Channel::new();
     
     /* control channels */
     pub static READY: AtomicBool = AtomicBool::new(false);
@@ -90,14 +46,6 @@ pub mod moi {
                             time: Instant::now(), 
                             read: reading};
                 SINK.send(sample.into()).await;
-                /*log::info!("{},{},{},{},{},{},,,,", 
-                    sample.time.as_micros(),
-                    sample.sensory,
-                    sample.read[0] as u8,
-                    sample.read[1] as u8,
-                    sample.read[2] as u8,
-                    sample.read[3] as u8);*/
-                // TRIGGER.send(sample).await; <--- makes it hang
                 };
             }                
         }
@@ -121,14 +69,6 @@ pub mod moi {
                                 time: Instant::now(), 
                                 read: reading};
                     SINK.send(sample.into()).await;
-                    /*log::info!("{},{},{},{},{},{},,,,", 
-                        sample.time.as_micros(),
-                        sample.sensory,
-                        sample.read[0] as u8,
-                        sample.read[1] as u8,
-                        sample.read[2] as u8,
-                        sample.read[3] as u8);*/
-                    // TRIGGER.send(sample).await; <--- makes it hang
                     };
                 }                
             }
@@ -138,11 +78,11 @@ pub mod moi {
 pub mod adc {
     
     use super::*;
-    use hal::peripherals::{PIN_26, PIN_27, PIN_28, PIN_29};
+    use hal::peripherals::{PIN_26, PIN_27, PIN_28};
     use hal::adc::{Adc, Async, Channel};
     use hal::gpio::Pull;
 
-    pub type Reading = [u16; 4];
+    pub type Reading = [u16; 3];
     pub struct Result {
         pub time: Instant,
         pub reading: Reading
@@ -162,7 +102,6 @@ pub mod adc {
                     adc_0: PIN_26,
                     adc_1: PIN_27,
                     adc_2: PIN_28,
-                    adc_3: PIN_29,
                     hz: u64,
                 sensory: u8) {
         let mut ticker = Ticker::every(Duration::from_hz(hz));
@@ -171,16 +110,15 @@ pub mod adc {
         let mut chan = 
         [ Channel::new_pin(adc_0, Pull::None),
           Channel::new_pin(adc_1, Pull::None),
-          Channel::new_pin(adc_2, Pull::None),
-          Channel::new_pin(adc_3, Pull::None),];
+          Channel::new_pin(adc_2, Pull::None),];
 
         loop {
             ticker.next().await;
             if RECORD.load(ORD){
-                let reading = [ adc.read(&mut chan[0]).await.unwrap(),
-                            adc.read(&mut chan[1]).await.unwrap(),
-                            adc.read(&mut chan[2]).await.unwrap(),
-                            adc.read(&mut chan[3]).await.unwrap()];
+                let reading = [   adc.read(&mut chan[0]).await.unwrap(),
+                                            adc.read(&mut chan[1]).await.unwrap(),
+                                            adc.read(&mut chan[2]).await.unwrap(),
+                                        ];
                 
                 let sample = Sample{
                             sensory: sensory,
@@ -188,15 +126,6 @@ pub mod adc {
                             read: reading};
                 
                 SINK.send(sample.into()).await;
-                
-                //log::info!("{},{},{},{}", 
-                /*log::info!("{},{},{},{},{},{},,,,", 
-                    result.time.as_micros(),
-                    sensory,
-                    result.reading[0],
-                    result.reading[1],
-                    result.reading[2],
-                    result.reading[3],);*/
                 };
             }                
         }
@@ -464,7 +393,7 @@ pub mod yxz_lsm6 {
             let sen_7 = Lsm6::new(hub.i2c7, SlaveAddress::Low, time::Delay);
             let mut sensors = [sen_0, sen_1, sen_2, sen_3, sen_4, sen_5, sen_6, sen_7];
             //let mut sensory = [Some(sen_0), Some(sen_1), Some(sen_2), Some(sen_3), Some(sen_4), Some(sen_5), Some(sen_6), Some(sen_7)];
-            let data_rate = DataRate::Freq6660Hz;
+            let data_rate = DataRate::Freq416Hz;
             for (s, sens) in sensors.as_mut().into_iter().enumerate() {
                 if s >= n as usize {continue}
                 else {  sens.set_accel_sample_rate(data_rate).unwrap();
@@ -641,15 +570,6 @@ pub mod yxz_bmi160 {
                                     sensory: sensory, 
                                     read: reading.into()};
                     SINK.send(sample.into()).await;
-                    /*log::info!("{},{},{},{},{},{},{},{},,",
-                        result.time.as_micros(),
-                        sensory,
-                        result.read[0],
-                        result.read[1],
-                        result.read[2],
-                        result.read[3],
-                        result.read[4],
-                        result.read[5]);*/
                     };
                 }
             }
@@ -675,7 +595,7 @@ pub mod yirt_max {
         // Sensor specific
         let mut sensor 
             = Max3010x::new_max30102(i2c).into_multi_led().unwrap();
-        sensor.set_sampling_rate(max3010x::SamplingRate::Sps1600).unwrap();
+        sensor.set_sampling_rate(max3010x::SamplingRate::Sps3200).unwrap();
         sensor.set_sample_averaging(SampleAveraging::Sa16).unwrap();
         sensor.set_pulse_amplitude(Led::All, 15).unwrap();
         sensor.enable_fifo_rollover().unwrap();
@@ -799,14 +719,6 @@ pub mod yco2 {
                                 let reading: Reading = [raw.co2 as f32, raw.humidity as f32, raw.temperature as f32];
                                 let sample = Sample{sensory: sensory, time: Instant::now(), read: reading};
                                 SINK.send(sample.into()).await;
-                                //DISP.signal([None, None, None, Some("CO2 read".try_into().unwrap())]);
-                                /*log::info!("{},{},{},{},{},,,,,",
-                                    result.time.as_micros(),
-                                    sensory,
-                                    result.reading[0],
-                                    result.reading[1],
-                                    result.reading[2],);*/
-                                //DISP.signal([None, None, None,Some("CO2 sent".try_into().unwrap())]);
                             },
                         };
                         
