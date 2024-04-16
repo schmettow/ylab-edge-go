@@ -34,13 +34,15 @@ pub struct Sample<M, const N: usize>
 
 pub const YTF_LEN: usize = 8;
 pub type YtfType = f64;
-pub type YtfRead = [Option<YtfType>; YTF_LEN];
+pub type YtfMeasure = Option<YtfType>;
+pub type YtfRead = [YtfMeasure; YTF_LEN];
 
 pub struct Ytf {
     pub sensory: u8,
     pub time: Instant,
     pub read: YtfRead,
 }
+
 
 impl<M: Into<YtfType>, const N: usize> Into<Ytf> for Sample<M, N> {
     fn into(self) -> Ytf {

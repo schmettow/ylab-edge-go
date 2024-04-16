@@ -10,38 +10,6 @@ pub struct SensorResult<R> {
 }
 
 
-pub mod fake {
-    use super::*;
-    /* data */
-    pub type Reading = [u16;4];
-    pub struct Result {
-        pub time: Instant,
-        pub reading: Reading
-    }
-    /* result channel */
-    pub static RESULT: Signal<RawMutex, Result> 
-    = Signal::new();
-    
-    /* control channel */
-    pub enum State {Ready, Record}
-    pub static CONTROL: Signal<RawMutex, State>  = Signal::new();
-    
-    #[embassy_executor::task]
-    pub async fn task(hz: u64) {
-        let mut ticker = Ticker::every(Duration::from_hz(hz));
-        loop {
-                let reading: Reading = [0,0,0,0];
-                let now: Instant = Instant::now();
-                let result = Result{time: now, reading: reading};
-                RESULT.signal(result);
-                ticker.next()
-                .await;
-                };
-            }
-        }
-
-
-
 pub mod moi {
     use super::*;
     use hal::peripherals::{PIN_21, PIN_22, PIN_8, PIN_9};
@@ -62,11 +30,11 @@ pub mod moi {
 
     /* trigger channel */
     //pub static TRIGGER: Channel<RawMutex, Sample, 2> = Channel::new();
-    
+
     /* control channels */
     pub static READY: AtomicBool = AtomicBool::new(false);
     pub static RECORD: AtomicBool = AtomicBool::new(true);
-    
+
     #[embassy_executor::task]
     pub async fn task(moi_0: PIN_21, moi_1: PIN_22, moi_2: PIN_8, moi_3: PIN_9, sensory: u8) {
     //pub async fn task(pins: [AnyPin; 4], trigger: [(bool, Option<bool>); 4], hz: u64, sensory: u8) {
@@ -463,18 +431,17 @@ pub mod yxz_lsm6 {
             let sen_6 = Lsm6::new(hub.i2c6, SlaveAddress::Low, time::Delay);
             let sen_7 = Lsm6::new(hub.i2c7, SlaveAddress::Low, time::Delay);
             let mut sensors = [sen_0, sen_1, sen_2, sen_3, sen_4, sen_5, sen_6, sen_7];
-            //let mut sensory = [Some(sen_0), Some(sen_1), Some(sen_2), Some(sen_3), Some(sen_4), Some(sen_5), Some(sen_6), Some(sen_7)];
+            
             let data_rate = DataRate::Freq6660Hz;
             for (s, sens) in sensors.as_mut().into_iter().enumerate() {
                 if s >= n as usize {continue}
                 else {  sens.set_accel_sample_rate(data_rate).unwrap();
                         sens.set_gyro_sample_rate(data_rate).unwrap();};
             }
-            //DISP.signal([None, None, None, Some("LSM6x3".try_into().unwrap())]);
+            
             let mut ticker 
                     = Ticker::every(Duration::from_hz(hz));
-            //let mut reading: Reading;
-            //let mut result: Sample;
+            
             READY.store(true, ORD);
             loop {
                 if RECORD.load(ORD){
@@ -488,15 +455,6 @@ pub mod yxz_lsm6 {
                                 gyro.z.as_hertz() as f32];
                         let sample = Sample{sensory: (s as u8 + sensory), time: Instant::now(), read: reading};
                         SINK.send(sample.into()).await;
-                        /*log::info!("{},{},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},,", 
-                            result.time.as_micros(),
-                            s,
-                            result.read[0],
-                            result.read[1],
-                            result.read[2],
-                            result.read[3],
-                            result.read[4],
-                            result.read[5],);*/
                         }
                     };
                     if !just_spin {ticker.next().await;};
@@ -696,9 +654,6 @@ pub mod yirt_max {
                 let sample = Sample{sensory: sensory, 
                     time: Instant::now(), read: reading};
                 SINK.send(sample.into()).await;
-                /*log::info!("{},1,{},,,,,,,",
-                    Instant::now().as_micros(),
-                    reading[0]);*/
                 ticker.next().await;
                 };
                 
@@ -749,10 +704,6 @@ pub mod yirt { // MLX90614
                     Sample{sensory: sensory, time: Instant::now(),
                             read: reading};
                 SINK.send(sample.into()).await;
-                /*log::info!("{},T,{},{}", 
-                    result.time.as_micros(),
-                    result.reading[0],
-                    result.reading[1]);*/
                 };
             }
         }
@@ -760,7 +711,7 @@ pub mod yirt { // MLX90614
 
 pub mod yco2 {
     use super::*;
-    use hal::peripherals::I2C0;
+    use embedded_hal::i2c::I2c;
     use scd4x;
 
     /* control channels */
@@ -772,7 +723,8 @@ pub mod yco2 {
     pub type Measure = SensorResult<Reading>;
 
     #[embassy_executor::task]
-    pub async fn task(  i2c: i2c::I2c<'static, I2C0, Mode>, sensory: u8) { 
+    pub async fn task (i2c: impl I2c +'static, sensory: u8) { 
+    //pub async fn task(  i2c: i2c::I2c<'static, I2C0, Mode>, sensory: u8) { 
         //DISP.signal([None, None, None, Some("CO2 start".try_into().unwrap())]);        
         let mut sensor = scd4x::Scd4x::new(i2c, time::Delay);
         //sensor.wake_up(); <---- This fails
