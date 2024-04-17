@@ -228,7 +228,7 @@ pub mod yxz_lsm6 {
         }
 
 
-        use xca9548a::{Xca9548a, SlaveAddr};
+        /*use xca9548a::{Xca9548a, SlaveAddr};
         #[embassy_executor::task]
         pub async fn multi_task(i2c: i2c::I2c<'static, I2C, Mode>,
                                 n: u8,
@@ -277,7 +277,7 @@ pub mod yxz_lsm6 {
                 }
             }
     
-
+    */
 
 
     //use hal::bind_interrupts;
@@ -414,16 +414,12 @@ pub mod yxz_bmi160 {
 
 
 
-/// ## BMI Acceleration Sensor
+// ## MPU6886 Acceleration Sensor
 pub mod yxz_mpu6886 {
     use super::*;
     use mpu6886 as mpu;
     use mpu6886::device::{ GyroRange, AccelRange};
-    /*use embedded_hal::{
-        blocking::delay::DelayMs,
-        blocking::i2c::{Write, WriteRead},
-    };*/
-
+    
     /* control channels */
     pub static READY: AtomicBool = AtomicBool::new(false);
     pub static RECORD: AtomicBool = AtomicBool::new(true);
@@ -437,10 +433,10 @@ pub mod yxz_mpu6886 {
     pub async fn task (i2c:  impl I2c + 'static,
                         hz: u64,
                         sensory: u8) { 
-        let delay: Delay = Delay;
-        let mut sensor = mpu::Mpu6886::new(i2c, delay);
+        let mut delay = time::Delay{};
+        let mut sensor = mpu::Mpu6886::new(i2c);
 
-        sensor.init().unwrap();
+        sensor.init(&mut delay).unwrap();
         sensor.set_accel_range(AccelRange::G2).unwrap();
         sensor.set_gyro_range(GyroRange::D250).unwrap();
 

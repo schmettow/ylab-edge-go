@@ -4,11 +4,17 @@
 /// CONFIGURATION
 /// 
 /// Adc Tcm
-static DEV: (bool, bool, bool, bool) = (true, true, true, false);
-static HZ: (u64, u64, u64, u64) = (0, 103, 113, 0);
+static DEV: (bool, bool, bool, bool) = (true, true, true, true);
+static HZ: (u64, u64, u64, u64) = (0, 103, 113, 50);
 static SPEED: u32 = 100_000;
 const LOG_LEVEL: log::LevelFilter = log::LevelFilter::Info;
-const MULTI: bool = true;
+const MULTI: bool = false;
+const _N: u64 = 3;
+
+use ylab::ysns::yxz_mpu6886 as mpu;
+use ylab::ysns::yxz_lsm6 as lsm;
+
+
 use {defmt_rtt as _, panic_probe as _};
 
 
@@ -69,6 +75,7 @@ fn init() -> ! {
             = EXECUTOR1.init(Executor::new());
         executor1.run(|spawner|{
             let i2c0  = p.I2C0;
+            let i2c1 = p.I2C1;
             if DEV.2 {
                 // LSM on Grove 1
                 let mut config = Config::default();
@@ -77,13 +84,21 @@ fn init() -> ! {
                 = i2c::I2c::new_async(i2c0, p.PIN_1, p.PIN_0,
                                         Irqs, config);
                 if MULTI {
-                    let n: u64 = 3;
-                    spawner.spawn(ylab::ysns::yxz_lsm6::multi_task(i2c, n as u8, HZ.2/n, false, 2)).unwrap();
+                    //spawner.spawn(ylab::ysns::yxz_lsm6::multi_task(i2c, N as u8, HZ.2/n, false, 2)).unwrap();
                 } else {
-                    spawner.spawn(ylab::ysns::yxz_lsm6::task(i2c, HZ.2, 2)).unwrap();
+                    spawner.spawn(lsm::task(i2c, HZ.2, 2)).unwrap();
                 }
                     
                 
+            }
+
+            if DEV.3 {
+                // MPU6886
+                let mut config = Config::default();
+                config.frequency = SPEED.into();
+                let i2c 
+                    = i2c::I2c::new_async(i2c1, p.PIN_3, p.PIN_2, Irqs, config);
+                spawner.spawn(mpu::task(i2c, HZ.3, 3)).unwrap();             
             }
 
         })
@@ -145,6 +160,7 @@ async fn control_task() {
                             moi::RECORD.store(false, ORD);
                             yadc::RECORD.store(false, ORD);
                             yxz_lsm6::RECORD.store(false, ORD);
+                            mpu::RECORD.store(false, ORD);
                             },
                         AppState::Ready     => {
                             // Pause all sensors and blink
