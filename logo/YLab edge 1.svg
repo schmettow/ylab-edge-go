@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="74.83493mm"
+   height="29.584724mm"
+   viewBox="0 0 74.83493 29.584724"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.3.1 (91b66b0783, 2023-11-16)"
+   sodipodi:docname="YLab edge 1.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="4.265404"
+     inkscape:cx="151.56829"
+     inkscape:cy="74.436091"
+     inkscape:window-width="2463"
+     inkscape:window-height="1411"
+     inkscape:window-x="1491"
+     inkscape:window-y="1759"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g7" />
+  <defs
+     id="defs1">
+    <rect
+       x="-35.4011"
+       y="10.081108"
+       width="341.81992"
+       height="194.58884"
+       id="rect6" />
+    <rect
+       x="46.185543"
+       y="40.55888"
+       width="191.07217"
+       height="73.381088"
+       id="rect1" />
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(1.2527146,-9.1859578)">
+    <text
+       xml:space="preserve"
+       transform="scale(0.26458333)"
+       id="text1"
+       style="font-size:39.9999px;line-height:1.25;font-family:Chicago;-inkscape-font-specification:'Chicago, Normal';white-space:pre;shape-inside:url(#rect1);display:inline"><tspan
+         x="46.185547"
+         y="183.69336"
+         id="tspan6"><tspan
+           dx="0 29.130222 25.156261 28.000015"
+           style="font-size:74.6667px;font-family:'Agency FB';-inkscape-font-specification:'Agency FB, Normal'"
+           id="tspan4">YLab</tspan></tspan></text>
+    <g
+       id="g6"
+       transform="matrix(0.97114515,0,0,0.97114515,3.9906499,1.6768169)">
+      <g
+         id="g7"
+         transform="matrix(0.96227768,0,0,0.96227768,2.7031546,1.4594886)">
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:27.3885px;line-height:1.25;font-family:Cyberverse;-inkscape-font-specification:'Cyberverse, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;stroke-width:0.285297"
+           x="21.513559"
+           y="26.243582"
+           id="text3"
+           transform="scale(0.94860615,1.0541783)"><tspan
+             sodipodi:role="line"
+             id="tspan1"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:27.3885px;font-family:Cyberverse;-inkscape-font-specification:'Cyberverse, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;stroke-width:0.285297"
+             x="21.513559"
+             y="26.243582">Lab</tspan></text>
+        <text
+           xml:space="preserve"
+           style="font-size:8.98362px;line-height:1.25;font-family:Chicago;-inkscape-font-specification:'Chicago, Normal';stroke-width:0.224591"
+           x="20.453064"
+           y="38.176628"
+           id="text2"><tspan
+             sodipodi:role="line"
+             id="tspan2"
+             x="20.453064"
+             y="38.176628"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:13.0773px;font-family:headplane;-inkscape-font-specification:'headplane, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;stroke-width:0.224591">e d g e</tspan></text>
+        <text
+           xml:space="preserve"
+           style="font-size:11.4593px;line-height:1.25;font-family:Chicago;-inkscape-font-specification:'Chicago, Normal';stroke-width:0.286484"
+           x="-8.9603786"
+           y="34.503223"
+           id="text5"
+           transform="scale(0.93968465,1.0641868)"><tspan
+             sodipodi:role="line"
+             id="tspan5"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:38.1976px;font-family:Cyberverse;-inkscape-font-specification:'Cyberverse, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;stroke-width:0.286484"
+             x="-8.9603786"
+             y="34.503223">Y</tspan></text>
+      </g>
+    </g>
+    <text
+       xml:space="preserve"
+       transform="scale(0.26458333)"
+       id="text6"
+       style="font-size:39.9999px;line-height:1.25;font-family:Chicago;-inkscape-font-specification:'Chicago, Normal';white-space:pre;shape-inside:url(#rect6)" />
+  </g>
+</svg>
