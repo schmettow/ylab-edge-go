@@ -80,25 +80,8 @@ fn init() -> ! {
                 // LSM on Grove 1
                 let mut config = Config::default();
                 config.frequency = SPEED.into();
-                let i2c 
-                = i2c::I2c::new_async(i2c0, p.PIN_1, p.PIN_0,
-                                        Irqs, config);
-                if MULTI {
-                    //spawner.spawn(ylab::ysns::yxz_lsm6::multi_task(i2c, N as u8, HZ.2/n, false, 2)).unwrap();
-                } else {
-                    spawner.spawn(lsm::task(i2c, HZ.2, 2)).unwrap();
-                }
-                    
-                
-            }
-
-            if DEV.3 {
-                // MPU6886
-                let mut config = Config::default();
-                config.frequency = SPEED.into();
-                let i2c 
-                    = i2c::I2c::new_async(i2c1, p.PIN_3, p.PIN_2, Irqs, config);
-                spawner.spawn(mpu::task(i2c, HZ.3, 3)).unwrap();             
+                let i2c = i2c::I2c::new_async(i2c0, p.PIN_1, p.PIN_0, Irqs, config);
+                spawner.spawn(mpu::task(i2c, HZ.3, 2)).unwrap();             
             }
 
         })

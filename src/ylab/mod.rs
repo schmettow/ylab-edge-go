@@ -7,6 +7,7 @@ pub use time::{Duration, Ticker, Instant, Delay};
 pub use heapless::{Vec, String};
 pub use embassy_sync::mutex::Mutex as Mutex;
 pub use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
+pub use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 pub use embassy_sync::signal::Signal;
 pub use embassy_sync::channel::Channel;
 

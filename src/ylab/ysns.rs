@@ -388,25 +388,13 @@ pub mod yxz_mpu6886 {
 
     }
 
-    use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-    
+
     #[embassy_executor::task]
-    pub async fn shared_task (i2c:  &mut Mutex<NoopRawMutex, impl I2c + 'static>,
-                        hz: u64,
-                        sensory: u8) { 
-        
+    pub async fn task (i2c: impl I2c + 'static, hz: u64, sensory: u8) { 
         let mut sensor = mpu::Mpu6886::new(i2c);
         sensor.prepare().unwrap();
         READY.store(true, ORD);
-        loop {
-            if RECORD.load(ORD){
-                let sample = sensor.sample(sensory).await;
-                match sample {
-                    Ok(sample) => SINK.send(sample.into()).await,
-                    Err(_) => {}
-                }
-            };
-        }
+        sensor.run(sensory, Duration::from_hz(hz)).await;
     }
 }
 
