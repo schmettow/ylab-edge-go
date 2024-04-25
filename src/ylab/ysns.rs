@@ -1,9 +1,9 @@
 pub use crate::*;
 pub use yuio::disp::TEXT as DISP;
 use hal::i2c;
-use embedded_hal::i2c::I2c;
+pub use embedded_hal::i2c::I2c;
 use i2c::Async as Mode;
-use crate::ytfk::bsu::SINK;
+pub use crate::ytfk::bsu::SINK;
 
 pub struct SensorResult<R> {
     pub time: Instant,
@@ -90,14 +90,6 @@ pub mod moi {
                                 time: Instant::now(), 
                                 read: reading};
                     SINK.send(sample.into()).await;
-                    /*log::info!("{},{},{},{},{},{},,,,", 
-                        sample.time.as_micros(),
-                        sample.sensory,
-                        sample.read[0] as u8,
-                        sample.read[1] as u8,
-                        sample.read[2] as u8,
-                        sample.read[3] as u8);*/
-                    // TRIGGER.send(sample).await; <--- makes it hang
                     };
                 }                
             }
@@ -157,15 +149,6 @@ pub mod adc {
                             read: reading};
                 
                 SINK.send(sample.into()).await;
-                
-                //log::info!("{},{},{},{}", 
-                /*log::info!("{},{},{},{},{},{},,,,", 
-                    result.time.as_micros(),
-                    sensory,
-                    result.reading[0],
-                    result.reading[1],
-                    result.reading[2],
-                    result.reading[3],);*/
                 };
             }                
         }
@@ -174,7 +157,6 @@ pub mod adc {
 pub mod yxz_lsm6 {
     
     use super::*;
-    use hal::peripherals::I2C0 as I2C;
     use lsm6dsox::*;
     use Lsm6dsox as Lsm6;
     use accelerometer::Accelerometer;
@@ -184,13 +166,41 @@ pub mod yxz_lsm6 {
     pub static RECORD: AtomicBool = AtomicBool::new(true);
     const N: usize = 6;
     pub type Measure  = f32;
-    pub type Reading  = [Measure; N];
+    pub type Reading  = crate::Reading<Measure, N>;
     pub type Sample = crate::Sample<Measure, N>;
     
-    
+    impl<I,D> Sensor<Measure, N> for Lsm6<I,D> 
+        where I: I2c,
+              D: embedded_hal::delay::DelayNs
+    {
+        fn prepare(&mut self) -> Result<(), SensoryError> {
+            self.setup().unwrap();
+            self.set_accel_sample_rate(DataRate::Freq1660Hz).unwrap();
+            self.set_accel_scale(AccelerometerScale::Accel2g).unwrap();
+            self.set_gyro_sample_rate(DataRate::Freq1660Hz).unwrap();
+            self.set_gyro_scale(GyroscopeScale::Dps250).unwrap();
+            return Ok(());
+        }
+
+        async fn read(&mut self) -> Result<[Measure; N], SensoryError> {
+            let accel = self.accel_norm();
+            let gyro = self.angular_rate();
+            match (accel, gyro) {
+                (Ok(accel), Ok(gyro)) => {
+                    Ok([ accel.x, accel.y, accel.z,
+                    gyro.x.as_hertz() as f32, 
+                    gyro.y.as_hertz() as f32, 
+                    gyro.z.as_hertz() as f32])},
+                (_,_) => Err(SensoryError::Read),
+            }
+        }
+
+    }
+
+    //type I2cBus = shared_bus::I2cProxy<'static, Mutex<core::cell::RefCell<i2c: i2c::I2c<'static, I2C, Mode>>>>; 
 
     #[embassy_executor::task]
-    pub async fn task(  i2c: i2c::I2c<'static, I2C, Mode>,
+    pub async fn task (i2c:  impl I2c + 'static,
                         hz: u64,
                         sensory: u8) { 
         
@@ -280,86 +290,7 @@ pub mod yxz_lsm6 {
     */
 
 
-    //use hal::bind_interrupts;
-    type SharedI2C = Mutex<RawMutex, Option<I2C>>;
     
-    #[embassy_executor::task(pool_size = 3)]
-    pub async fn sharing_task(i2c: &'static SharedI2C,
-        scl: &'static  Mutex<RawMutex, Option<impl i2c::SclPin<I2C>>>,
-        sda: &'static  Mutex<RawMutex, Option<impl i2c::SdaPin<I2C>>>,
-        hz: u64)
-        -> ()
-        {
-        let mut ticker = Ticker::every(Duration::from_hz(hz));
-        //DISP.signal([None, None, None, Some("LSM shared ticks".try_into().unwrap())]);
-        //let mut reading: Reading;
-        //let mut result: SensorResult<Reading>;
-        READY.store(true, ORD);
-        loop {
-            ticker.next().await;
-            if RECORD.load(ORD){
-                match read(i2c, scl, sda).await{
-                    Ok(Some(_reading)) 
-                        => todo!(),
-                    _   => {}
-                    }        
-                };
-            }
-        }
-
-    /// One-shot read
-    /// 
-    /// does a full round of initialization and one
-    /// DEACTIVATED, because interrupt binding collides.
-
-    pub async fn read(_i2c: &'static SharedI2C,
-        
-        _scl: &'static  Mutex<RawMutex, Option<impl i2c::SclPin<I2C>>>,
-        _sda: &'static  Mutex<RawMutex, Option<impl i2c::SdaPin<I2C>>>,)
-        -> Result<Option<Reading>,Error>
-        {
-            
-        {   todo!();
-            // inner scope   
-            /* bind_interrupts!(struct Irqs {
-                I2C0_IRQ => i2c::InterruptHandler<I2C>;
-            });
-            let mut i2c_unlocked = i2c.lock().await;
-            let mut scl = scl.lock().await;
-            let mut sda = sda.lock().await;
-            //DISP.signal([None, Some("Got lock".try_into().unwrap()), None,None]);
-            if let Some(i2c) = i2c_unlocked.as_mut() {
-                let i2c 
-                    = i2c::I2c::new_async(i2c,  scl.as_mut().unwrap(), sda.as_mut().unwrap(), Irqs, i2c::Config::default());
-                //DISP.signal([None, Some("Got I2C".try_into().unwrap()), None,None]);
-                let mut sensor 
-                    = Lsm6::new(i2c, SlaveAddress::Low, time::Delay);
-                //DISP.signal([None, Some("Got LSM".try_into().unwrap()), None,None]);
-                sensor.setup().unwrap();
-                sensor.set_accel_sample_rate(DataRate::Freq416Hz).unwrap();
-                sensor.set_gyro_sample_rate(DataRate::Freq416Hz).unwrap();
-                //sensor.set_accel_scale(AccelerometerScale::Accel2g).unwrap();
-                //sensor.set_gyro_scale(GyroscopeScale::Dps250).unwrap();
-                //DISP.signal([None, Some("All set".try_into().unwrap()), None,None]);
-                let accel = sensor.accel_norm();
-                let gyro = sensor.angular_rate();
-                match (accel, gyro) {
-                    (Ok(accel), Ok(gyro)) 
-                    => {//DISP.signal([None, Some("Got Read".try_into().unwrap()), None,None]);
-                        let reading = [ accel.x, accel.y, accel.z,
-                                    gyro.x.as_rpm() as f32, 
-                                    gyro.y.as_rpm() as f32, 
-                                    gyro.z.as_rpm() as f32];
-                        DISP.signal([None, Some("Got Sense".try_into().unwrap()), None,None]);
-                        return Ok(Some(reading))
-                        },
-                    (Err(_), Err(_)) => return Ok(None),
-                    (_,_) => Ok(None),
-                    }
-            } else {return Err(lsm6dsox::Error::ResetFailed)}*/
-        }// inner scope
-        }
-
     }
     
 
@@ -425,39 +356,59 @@ pub mod yxz_mpu6886 {
     pub static RECORD: AtomicBool = AtomicBool::new(true);
     
     const N: usize = 6;
-    pub type Measure = f32;
-    pub type Reading = [Measure; N]; /// <--- 4 channel is total accel for now
+    pub type Measure  = f32;
+    pub type Reading  = crate::Reading<Measure, N>;
     pub type Sample = crate::Sample<Measure, N>;
+    
+    impl<I> Sensor<Measure, N> for mpu::Mpu6886<I> 
+        where I: I2c + 'static
+    {
+        fn prepare(&mut self) -> Result<(), SensoryError> {
+            self.init(&mut Delay{}).unwrap();
+            self.set_accel_range(AccelRange::G2).unwrap();
+            self.set_gyro_range(GyroRange::D250).unwrap();
+            return Ok(());
+        }
 
+        async fn read(&mut self) -> Result<[Measure; N], SensoryError> {
+            let acc = self.get_acc();
+            let gyr  = self.get_gyro();
+            match (acc, gyr) {
+                (Ok(accel), Ok(gyro)) => {
+                    let accel: [Measure; 3]= accel.into();
+                    let gyro: [Measure; 3]= gyro.into();
+                    Ok([ accel[0], accel[1], accel[2],
+                        gyro[0], gyro[1], gyro[2]])},
+                (_,_) => Err(SensoryError::Read),
+            }
+            
+
+            
+        }
+
+    }
+
+    use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+    
     #[embassy_executor::task]
-    pub async fn task (i2c:  impl I2c + 'static,
+    pub async fn shared_task (i2c:  &mut Mutex<NoopRawMutex, impl I2c + 'static>,
                         hz: u64,
                         sensory: u8) { 
-        let mut delay = time::Delay{};
+        
         let mut sensor = mpu::Mpu6886::new(i2c);
-
-        sensor.init(&mut delay).unwrap();
-        sensor.set_accel_range(AccelRange::G2).unwrap();
-        sensor.set_gyro_range(GyroRange::D250).unwrap();
-
-        let mut ticker = Ticker::every(Duration::from_hz(hz));
+        sensor.prepare().unwrap();
         READY.store(true, ORD);
-
         loop {
-            ticker.next().await;
             if RECORD.load(ORD){
-                DISP.signal([None, None, None, Some("BMI160 ...".try_into().unwrap())]);
-                let acc: [f32; 3] = sensor.get_acc().unwrap().into();
-                let gyr: [f32; 3] = sensor.get_gyro().unwrap().into();
-                let reading: [f32; 6] = [acc[0], acc[1], acc[2], gyr[0], gyr[1], gyr[2]];                
-                let sample = Sample{time: Instant::now(),
-                                sensory: sensory, 
-                                read: reading.into()};
-                SINK.send(sample.into()).await;
-                };
-            }
+                let sample = sensor.sample(sensory).await;
+                match sample {
+                    Ok(sample) => SINK.send(sample.into()).await,
+                    Err(_) => {}
+                }
+            };
         }
     }
+}
 
 
 
