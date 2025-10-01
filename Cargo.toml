@@ -17,13 +17,13 @@ defmt = "0.3"
 defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 
-embassy-embedded-hal = { version = "0.1.0", features = ["defmt"] }
+embassy-embedded-hal = { version = "0.2.0", features = ["defmt"] }
 embassy-executor = { version = "0.5.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"] }
 embassy-futures = { version = "0.1.0" }
 embassy-sync = { version = "0.5.0", features = ["defmt"] }
-embassy-time = { version = "0.3.0", features = ["defmt", "defmt-timestamp-uptime"] }
-embassy-usb = { version = "0.1.0", features = ["defmt"] }
-embassy-usb-logger = { version = "0.1.0" }
+embassy-time = { version = "0.3.2", features = ["defmt", "defmt-timestamp-uptime"] }
+embassy-usb = { version = "0.2.0", features = ["defmt"] }
+embassy-usb-logger = { version = "0.2.0"}
 
 embassy-rp = { version = "0.1.0", features = ["defmt", "time-driver", "critical-section-impl"] }
 log = "0.4"
@@ -37,7 +37,7 @@ lsm6ds33 = "0.5.0"
 ads1x1x = "0.2.2"
 #embedded-ads111x = "0.1.1"
 ssd1306 = "0.8.0"
-embedded-graphics = "0.8.0"
+embedded-graphics = "0.8"
 itoa = "1.0.9"
 heapless = "0.8.0"
 nb = "1.1.0"
@@ -48,6 +48,8 @@ scd4x = { version = "0.3.0", default-features=false, features = ["scd41"] }
 max3010x = {version = "0.1.0", default-features=false}
 lsm6dsox = "1.0.1"
 xca9548a = "0.2.1"
+#sensor-tlv493d = {version = "0.1.0", default-features = false}
+tlv493d = { path = "../tlv493d" }
 
 
 ## network drivers for cyw43 (pico W) or wiznet w5500
@@ -110,4 +112,3 @@ debug-assertions = false
 incremental = false
 lto = 'fat'
 opt-level = 's'
-

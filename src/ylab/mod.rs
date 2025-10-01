@@ -1,28 +1,28 @@
 #![no_std]
 
 pub use embassy_rp as hal;
-pub use embassy_time as time;
-pub use time::{Duration, Ticker, Instant, Delay};
-pub use heapless::{Vec, String};
-pub use embassy_sync::mutex::Mutex as Mutex;
 pub use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
-pub use embassy_sync::signal::Signal;
 pub use embassy_sync::channel::Channel;
+pub use embassy_sync::mutex::Mutex;
+pub use embassy_sync::signal::Signal;
+pub use embassy_time as time;
+pub use heapless::{String, Vec};
+pub use time::{Delay, Duration, Instant, Ticker};
 
-pub use core::sync::atomic::Ordering;
 pub use core::sync::atomic::AtomicBool;
+pub use core::sync::atomic::Ordering;
 pub static ORD: Ordering = Ordering::SeqCst;
 
-
 pub mod ysns; // Ylab sensors
-pub mod yuio; // YLab UI Output
+pub mod ytfk;
 pub mod yuii; // YLab UI Input
-pub mod ytfk; // YLab transfer formats & kodices
+pub mod yuio; // YLab UI Output // YLab transfer formats & kodices
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Sample<M, const N: usize>
-    where M: Into<YtfType>
-    {
+where
+    M: Into<YtfType>,
+{
     pub sensory: u8,
     pub time: Instant,
     pub read: [M; N],
@@ -47,7 +47,7 @@ impl<M: Into<YtfType>, const N: usize> Into<Ytf> for Sample<M, N> {
         Ytf {
             sensory: self.sensory,
             time: self.time,
-            read: out
+            read: out,
         }
     }
 }
@@ -58,12 +58,13 @@ impl core::fmt::Display for Ytf {
         for r in self.read {
             match r {
                 Some(v) => {
-                    write!(f, ",{:.3}", v).unwrap();},
-                None => {write!(f, ",").unwrap();}
+                    write!(f, ",{:.3}", v).unwrap();
+                }
+                None => {
+                    write!(f, ",").unwrap();
+                }
             }
         }
         write!(f, "")
     }
 }
-
-
