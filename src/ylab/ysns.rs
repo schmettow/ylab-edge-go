@@ -9,10 +9,87 @@ pub struct SensorResult<R> {
     pub reading: R,
 }
 
+use core::fmt::Debug;
+
+// Generic over Value type, Number of samples, Sensor ID, and Frequency type
+pub trait AsyncSensor<V: Into<f64>, const N: usize, const ID: u8, H: Into<u16>> {
+    type Error: Debug;
+    /// Initialize the sensor with the given frequency.
+    #[allow(async_fn_in_trait)]
+    fn init(&mut self, hz: H) -> Result<(), Self::Error>;
+    /// Return sample frequency of the sensor
+    fn hz(&self) -> u16;
+    /// Return sampling interval in milliseconds
+
+    fn interval(&self) -> Duration {
+        Duration::from_millis(1000 / self.hz() as u64)
+    }
+    /// Set sample frequency of the sensor using its specific scheme
+    fn set_hz(&mut self, hz: H) -> ();
+    #[allow(async_fn_in_trait)]
+    async fn read(&mut self) -> Result<[V; N], Self::Error>;
+    #[allow(async_fn_in_trait)]
+    async fn sample(&mut self) -> Result<Sample<V, N>, Self::Error> {
+        let value = self.read().await?;
+        let sample = Sample {
+            time: Instant::now(),
+            read: value,
+            sensory: ID,
+        };
+        Ok(sample)
+    }
+}
+
+#[macro_export]
+macro_rules! impl_sampling_task {
+    ($task_name:ident, $sensor_ty:ty) => {
+        #[embassy_executor::task]
+        pub async fn $task_name(mut sensor: $sensor_ty) {
+            // Initialize sensor with its configured frequency
+            if let Err(e) = sensor.init(sensor.hz().into()) {
+                log::error!(concat!(stringify!($task_name), " init error: {:?}"), e);
+                return;
+            }
+
+            let mut ticker = embassy_time::Ticker::every(sensor.interval());
+
+            loop {
+                match sensor.sample().await {
+                    Ok(sample) => {
+                        // Forward sample to your global channel
+                        SINK.send(sample.into()).await;
+                    }
+                    Err(e) => {
+                        log::warn!(concat!(stringify!($task_name), " read error: {:?}"), e);
+                    }
+                }
+
+                ticker.next().await;
+            }
+        }
+    };
+}
+
+/*#[embassy_executor::task]
+async fn run(sensor: &'static mut dyn AsyncSensor<>, hz: H) {
+    sensor.init(hz).unwrap();
+    let mut ticker = embassy_time::Ticker::every(sensor.interval());
+    loop {
+        match sensor.sample().await {
+            Ok(sample) => {
+                SINK.send(sample.into()).await;
+            }
+            Err(_) => {}
+        }
+        ticker.next().await;
+    }
+}*/
+
+//
 
 pub mod moi {
     use super::*;
-    use hal::gpio::{Input, Pull};
+    use hal::gpio::{AnyPin, Input, Pull};
     use hal::peripherals::{PIN_21, PIN_22, PIN_8, PIN_9};
 
     pub type Measure = bool;
@@ -22,6 +99,63 @@ pub mod moi {
     /* control channels */
     pub static READY: AtomicBool = AtomicBool::new(false);
     pub static RECORD: AtomicBool = AtomicBool::new(true);
+
+    ///////////////////
+
+    pub struct Moi<'d> {
+        pub pin: [Option<Input<'d, AnyPin>>; 8],
+        pub sensory: u8,
+        pub hz: u16,
+    }
+
+    impl<'d> Moi<'d> {
+        pub fn new(pin: [Option<AnyPin>; 8]) -> Self {
+            let inputs = pin.map(|pin| {
+                if let Some(pin) = pin {
+                    Some(Input::new(pin, Pull::Up))
+                } else {
+                    None
+                }
+            });
+            Self {
+                pin: inputs,
+                sensory: 0,
+                hz: 0,
+            }
+        }
+    }
+
+    impl<'d> AsyncSensor<bool, 8, 0, u16> for Moi<'d> {
+        type Error = ();
+        fn init(&mut self, hz: u16) -> Result<(), ()> {
+            self.set_hz(hz);
+            Ok(())
+        }
+
+        fn set_hz(&mut self, hz: u16) {
+            self.hz = hz;
+        }
+        fn hz(&self) -> u16 {
+            self.hz
+        }
+
+        async fn read(&mut self) -> Result<[bool; 8], ()> {
+            let mut reading: [bool; 8] = [false; 8];
+            for i in 0..8 {
+                let pin = &self.pin[i];
+                let res = match pin {
+                    Some(pin) => pin.is_high(),
+                    None => false,
+                };
+                reading[i] = res;
+            }
+            Ok(reading)
+        }
+    }
+
+    impl_sampling_task!(run, Moi<'static>);
+
+    ///////////////////
 
     #[embassy_executor::task]
     pub async fn task(moi_0: PIN_21, moi_1: PIN_22, moi_2: PIN_8, moi_3: PIN_9, sensory: u8) {
